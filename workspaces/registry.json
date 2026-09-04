@@ -1,0 +1,25 @@
+{
+  "activeWorkspace": "math-2113",
+  "workspaces": [
+    {
+      "id": "default",
+      "name": "Default Workspace",
+      "createdAt": "2026-08-10T15:18:57.918Z"
+    },
+    {
+      "id": "dm",
+      "name": "DM",
+      "createdAt": "2026-08-10T15:22:54.480Z"
+    },
+    {
+      "id": "tuition",
+      "name": "tuition",
+      "createdAt": "2026-08-10T15:33:18.836Z"
+    },
+    {
+      "id": "math-2113",
+      "name": "Math 2113",
+      "createdAt": "2026-08-16T15:54:23.077Z"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "categories": [
+    "General",
+    "Work",
+    "Personal",
+    "Study",
+    "Finance"
+  ],
+  "items": [
+    {
+      "id": "item_1786895708309_5b5gv",
+      "type": "link",
+      "title": "hasib note",
+      "category": "Study",
+      "createdAt": "2026-08-16T15:55:08.310Z",
+      "url": "https://drive.google.com/file/d/102IpcfNxir8RCkEpLlETmDGofFQCOCrV/view",
+      "description": ""
+    },
+    {
+      "id": "item_1786895819951_nosfg",
+      "type": "file",
+      "title": "Slide",
+      "fileName": "Lecture 2 Vectorspace.pdf",
+      "fileSize": 1178207,
+      "filePath": "/uploads/math-2113/Trignometry/Lecture_2_Vectorspace-1786895819907.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-08-16T15:56:59.951Z"
+    },
+    {
+      "id": "item_1786895849007_91okf",
+      "type": "file",
+      "title": "Lecture 1 Math-2113.pdf",
+      "fileName": "Lecture 1 Math-2113.pdf",
+      "fileSize": 1682022,
+      "filePath": "/uploads/math-2113/Trignometry/Lecture_1_Math-2113-1786895848946.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-08-16T15:57:29.007Z"
+    }
+  ]
+}

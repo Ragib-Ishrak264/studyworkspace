@@ -1,0 +1,20 @@
+{
+  "categories": [
+    "General",
+    "Work",
+    "Personal",
+    "Study",
+    "Finance"
+  ],
+  "items": [
+    {
+      "id": "item_1786375453073_zkhf8",
+      "type": "link",
+      "title": "Lecture Note",
+      "category": "Study",
+      "createdAt": "2026-08-10T15:24:13.073Z",
+      "url": "https://classroom.google.com/c/ODY4MjA2MDM2NDUw/m/ODU1MjI0MDE0MzAy/details",
+      "description": "Books plus lecture note"
+    }
+  ]
+}

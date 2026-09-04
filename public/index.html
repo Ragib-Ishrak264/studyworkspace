@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Personal Workspace | Local Hub</title>
+  <meta name="description" content="A local offline dashboard to organize links, notes, and PDF files securely on your device.">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons (Local offline copy) -->
+  <script src="lucide.min.js"></script>
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <i data-lucide="layout-dashboard" class="logo-icon"></i>
+          <span>Workspace Hub</span>
+        </div>
+        
+        <!-- Workspace Selector -->
+        <div class="workspace-selector-container">
+          <select id="workspace-select" aria-label="Select Workspace"></select>
+          <div class="workspace-actions">
+            <button id="btn-add-workspace" title="Create Workspace">
+              <i data-lucide="plus"></i>
+            </button>
+            <button id="btn-delete-workspace" title="Delete Active Workspace" class="btn-workspace-danger">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Category Filter -->
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <h3>Main Filters</h3>
+          <ul class="nav-list">
+            <li class="active" id="filter-all" data-type="all">
+              <i data-lucide="grid"></i>
+              <span>All Items</span>
+              <span class="badge" id="count-all">0</span>
+            </li>
+            <li id="filter-links" data-type="link">
+              <i data-lucide="link-2"></i>
+              <span>Links</span>
+              <span class="badge" id="count-links">0</span>
+            </li>
+            <li id="filter-files" data-type="file">
+              <i data-lucide="file-text"></i>
+              <span>PDFs & Files</span>
+              <span class="badge" id="count-files">0</span>
+            </li>
+            <li id="filter-folders" data-type="folders">
+              <i data-lucide="folder-open"></i>
+              <span>Folders</span>
+              <span class="badge" id="count-folders">0</span>
+            </li>
+            <li id="filter-notes" data-type="note">
+              <i data-lucide="sticky-note"></i>
+              <span>Notes</span>
+              <span class="badge" id="count-notes">0</span>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="nav-section">
+          <div class="section-title-with-btn">
+            <h3>Categories</h3>
+            <button id="btn-add-category" title="Add Category" aria-label="Add Category">
+              <i data-lucide="plus"></i>
+            </button>
+          </div>
+          <ul class="nav-list" id="categories-list">
+            <!-- Dynamically populated categories -->
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Storage & Stats -->
+      <div class="sidebar-stats">
+        <div class="stats-title">
+          <i data-lucide="database"></i>
+          <span>Local Storage</span>
+        </div>
+        <div class="stats-info">
+          <div class="stat-row">
+            <span>Uploaded Files</span>
+            <strong id="stat-files-count">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>Total File Size</span>
+            <strong id="stat-files-size">0 KB</strong>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Area -->
+    <main class="main-content">
+      
+      <!-- Header / Search Bar -->
+      <header class="header">
+        <div class="header-left">
+          <h1 class="page-title">Workspace Dashboard</h1>
+          <p class="page-subtitle">Your local repository of links, papers, and notes</p>
+        </div>
+        
+        <div class="header-actions">
+          <div class="search-container">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" id="search-input" placeholder="Search title, description, or content..." aria-label="Search items">
+          </div>
+          
+          <button id="btn-new-item" class="btn btn-primary">
+            <i data-lucide="plus-circle"></i>
+            <span>Add Item</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Active Filter Display -->
+      <section class="filter-status" id="filter-status-bar" style="display: none;">
+        <span>Showing results for Category: <strong id="active-category-label">General</strong></span>
+        <button id="btn-clear-category-filter" class="btn btn-text">
+          <i data-lucide="x"></i> Clear filter
+        </button>
+      </section>
+
+      <!-- Empty State -->
+      <div class="empty-state" id="empty-state" style="display: none;">
+        <div class="empty-illustration">
+          <i data-lucide="folder-open" class="empty-icon"></i>
+        </div>
+        <h2>Your workspace is empty</h2>
+        <p>Start organizing your resources by adding files, note entries, or useful bookmark links.</p>
+        <button id="btn-empty-add" class="btn btn-primary">
+          <i data-lucide="plus"></i> Add First Item
+        </button>
+      </div>
+
+      <!-- Items Grid -->
+      <section class="items-grid" id="items-grid">
+        <!-- Dynamically populated cards -->
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- Folder Explorer Panel (shown when "Folders" filter is active) -->
+      <!-- ============================================================ -->
+      <div class="folder-explorer" id="folder-explorer" style="display: none;">
+
+        <!-- Toolbar -->
+        <div class="folder-toolbar">
+          <div class="folder-breadcrumb" id="folder-breadcrumb">
+            <button class="breadcrumb-item breadcrumb-root" id="btn-breadcrumb-root" title="Root">
+              <i data-lucide="hard-drive"></i>
+              <span>Root</span>
+            </button>
+            <!-- Dynamic breadcrumb segments appended here -->
+          </div>
+          <div class="folder-toolbar-actions">
+            <button class="fe-btn" id="btn-fe-new-folder" title="New Folder">
+              <i data-lucide="folder-plus"></i>
+              <span>New Folder</span>
+            </button>
+            <button class="fe-btn fe-btn-accent" id="btn-fe-upload" title="Upload Files Here">
+              <i data-lucide="upload-cloud"></i>
+              <span>Upload Here</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Two-pane layout -->
+        <div class="folder-panes">
+
+          <!-- Left: Folder Tree -->
+          <aside class="folder-tree-pane">
+            <div class="folder-tree-header">
+              <i data-lucide="folder-tree"></i>
+              <span>Folders</span>
+            </div>
+            <div class="folder-tree-scroll">
+              <ul class="folder-tree" id="folder-tree">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+          </aside>
+
+          <!-- Right: File Contents -->
+          <section class="folder-contents-pane">
+            <!-- Empty folder state -->
+            <div class="folder-contents-empty" id="folder-contents-empty" style="display:none;">
+              <i data-lucide="folder-open" class="fe-empty-icon"></i>
+              <p>This folder is empty.</p>
+              <button class="fe-btn fe-btn-accent" id="btn-fe-upload-empty">
+                <i data-lucide="upload-cloud"></i> Upload Files
+              </button>
+            </div>
+            <!-- File list -->
+            <div class="folder-file-list" id="folder-file-list">
+              <!-- Dynamically populated file rows -->
+            </div>
+            <!-- Sub-folder cards -->
+            <div class="folder-subfolder-grid" id="folder-subfolder-grid">
+              <!-- Dynamically populated sub-folder cards -->
+            </div>
+          </section>
+
+        </div>
+      </div>
+      
+    </main>
+  </div>
+
+  <!-- Modal Backdrop for Add Item -->
+  <div class="modal-backdrop" id="modal-add-item">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Add Resource</h2>
+        <button class="modal-close" id="btn-close-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      
+      <!-- Modal Tabs -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="form-add-link">
+          <i data-lucide="link-2"></i> Link
+        </button>
+        <button class="tab-btn" data-tab="form-upload-file">
+          <i data-lucide="file-up"></i> PDF / File
+        </button>
+        <button class="tab-btn" data-tab="form-add-note">
+          <i data-lucide="sticky-note"></i> Note
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body">
+        
+        <!-- Add Link Form -->
+        <form id="form-add-link" class="modal-form-tab active">
+          <div class="form-group">
+            <label for="link-title">Title *</label>
+            <input type="text" id="link-title" required placeholder="e.g. Developer Docs, Google Search">
+          </div>
+          <div class="form-group">
+            <label for="link-url">URL / Web Link *</label>
+            <input type="url" id="link-url" required placeholder="https://example.com">
+          </div>
+          <div class="form-group">
+            <label for="link-desc">Description</label>
+            <textarea id="link-desc" rows="3" placeholder="Brief note about what this link is for..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="link-category">Category</label>
+            <select id="link-category" class="select-category">
+              <!-- Dynamically populated categories -->
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Save Link</button>
+        </form>
+
+        <!-- Upload PDF Form -->
+        <form id="form-upload-file" class="modal-form-tab">
+          <div class="form-group">
+            <label for="file-title">Title (Optional)</label>
+            <input type="text" id="file-title" placeholder="Leaves empty to use original filename">
+          </div>
+          <div class="form-group">
+            <label>Select PDF or File *</label>
+            <div class="file-dropzone" id="file-dropzone">
+              <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+              <p>Drag & Drop files here, or <span class="browse-text">browse files</span></p>
+              <input type="file" id="file-input" required accept=".pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple style="display: none;">
+            </div>
+            <div class="selected-file-indicator" id="selected-file-info" style="display: none;">
+              <i data-lucide="file"></i>
+              <span class="file-name-label" id="file-name-label">filename.pdf</span>
+              <button type="button" class="btn-remove-selected-file" id="btn-remove-file">
+                <i data-lucide="trash-2"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="file-desc">Description</label>
+            <textarea id="file-desc" rows="3" placeholder="Explain what is inside this document..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="file-category">Category</label>
+            <select id="file-category" class="select-category">
+              <!-- Dynamically populated categories -->
+            </select>
+          </div>
+          
+          <div class="progress-bar-container" id="upload-progress-container" style="display: none;">
+            <div class="progress-bar-fill" id="upload-progress-fill"></div>
+            <div class="progress-bar-text" id="upload-progress-text">Uploading... 0%</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-upload">Upload File</button>
+        </form>
+
+        <!-- Add Note Form -->
+        <form id="form-add-note" class="modal-form-tab">
+          <div class="form-group">
+            <label for="note-title">Title *</label>
+            <input type="text" id="note-title" required placeholder="e.g. Brainstorming, Project To-Do">
+          </div>
+          <div class="form-group">
+            <label for="note-content">Note Content *</label>
+            <textarea id="note-content" required rows="6" placeholder="Write down your thoughts, code snippets, lists, etc..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="note-category">Category</label>
+            <select id="note-category" class="select-category">
+              <!-- Dynamically populated categories -->
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Save Note</button>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Backdrop for Custom Category Creation -->
+  <div class="modal-backdrop" id="modal-add-category">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h2>Create Category</h2>
+        <button class="modal-close" id="btn-close-cat-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-category">
+          <div class="form-group">
+            <label for="category-name">Category Name *</label>
+            <input type="text" id="category-name" required placeholder="e.g. Recipes, Work, Invoices">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Create Category</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Backdrop for Workspace Creation -->
+  <div class="modal-backdrop" id="modal-add-workspace">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h2>Create Workspace</h2>
+        <button class="modal-close" id="btn-close-ws-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-workspace">
+          <div class="form-group">
+            <label for="workspace-name">Workspace Name *</label>
+            <input type="text" id="workspace-name" required placeholder="e.g. Physics Course, Recipes, Personal">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Create Workspace</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Create Folder -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-create-folder">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h2>Create Folder</h2>
+        <button class="modal-close" id="btn-close-folder-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-create-folder">
+          <div class="form-group">
+            <label for="folder-name-input">Folder Name *</label>
+            <input type="text" id="folder-name-input" required placeholder="e.g. Physics Notes, Semester 1">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px;">Create Folder</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Upload to Folder -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-folder-upload">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Upload to Folder</h2>
+        <button class="modal-close" id="btn-close-folder-upload-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-folder-upload">
+          <div class="form-group">
+            <label>Target Folder</label>
+            <div class="fe-target-folder-display" id="fe-target-folder-display">
+              <i data-lucide="folder"></i>
+              <span id="fe-target-folder-label">Root</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Files *</label>
+            <div class="file-dropzone" id="fe-file-dropzone">
+              <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+              <p>Drag &amp; drop files, or <span class="browse-text">browse</span></p>
+              <input type="file" id="fe-file-input" multiple style="display:none;">
+            </div>
+            <div class="selected-file-indicator" id="fe-selected-info" style="display:none;">
+              <i data-lucide="file"></i>
+              <span class="file-name-label" id="fe-file-name-label">filename</span>
+              <button type="button" class="btn-remove-selected-file" id="btn-fe-remove-file">
+                <i data-lucide="trash-2"></i>
+              </button>
+            </div>
+          </div>
+          <div class="progress-bar-container" id="fe-upload-progress" style="display:none;">
+            <div class="progress-bar-fill" id="fe-progress-fill"></div>
+            <div class="progress-bar-text" id="fe-progress-text">Uploading...</div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-fe-submit-upload" style="margin-top:12px;">Upload Files</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Rename (folder or file) -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-fe-rename">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h2 id="fe-rename-modal-title">Rename</h2>
+        <button class="modal-close" id="btn-close-rename-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-fe-rename">
+          <div class="form-group">
+            <label for="fe-rename-input">New Name *</label>
+            <input type="text" id="fe-rename-input" required placeholder="Enter new name">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px;">Rename</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Move File to Folder -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-fe-move">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h2>Move File</h2>
+        <button class="modal-close" id="btn-close-move-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-fe-move">
+          <div class="form-group">
+            <label>File</label>
+            <div class="fe-move-file-display" id="fe-move-file-name">filename.pdf</div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label for="fe-move-destination-select">Choose Destination Folder *</label>
+            <select id="fe-move-destination-select" class="fe-folder-select" required></select>
+          </div>
+          <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-move">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-move">Move File</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Context Menu for Items & Folders -->
+  <!-- ========================================================== -->
+  <div class="custom-context-menu" id="custom-context-menu" style="display: none;">
+    <div class="context-menu-header" id="ctx-header">
+      <i data-lucide="info" id="ctx-icon"></i>
+      <span class="ctx-title" id="ctx-title">Item</span>
+    </div>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item" id="ctx-opt-details">
+      <i data-lucide="info"></i>
+      <span>Details &amp; History</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-open">
+      <i data-lucide="external-link"></i>
+      <span>Open</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-download" style="display:none;">
+      <i data-lucide="download"></i>
+      <span>Download</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-copy">
+      <i data-lucide="copy"></i>
+      <span>Copy Link / Path</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-move" style="display:none;">
+      <i data-lucide="folder-input"></i>
+      <span>Move to Folder</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-rename" style="display:none;">
+      <i data-lucide="pencil"></i>
+      <span>Rename</span>
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item danger" id="ctx-opt-delete">
+      <i data-lucide="trash-2"></i>
+      <span>Delete</span>
+    </button>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Item Details & History -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-item-details">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="info" id="detail-header-icon" style="color:var(--accent-primary);"></i>
+          <h2 id="detail-modal-title">Item Details</h2>
+        </div>
+        <button class="modal-close" id="btn-close-details-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="details-list" id="details-content">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="btn-details-close">Close</button>
+          <button type="button" class="btn btn-primary" id="btn-details-open">Open</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Note View / Preview -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-note-preview">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="sticky-note" style="color:#34d399;"></i>
+          <h2 id="note-preview-title">Note</h2>
+        </div>
+        <button class="modal-close" id="btn-close-note-preview" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="note-preview-meta" id="note-preview-meta"></div>
+        <div class="note-preview-content" id="note-preview-body"></div>
+        <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:space-between;">
+          <button type="button" class="btn btn-secondary" id="btn-note-copy">
+            <i data-lucide="copy"></i> Copy Content
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-note-preview-close">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Client JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
