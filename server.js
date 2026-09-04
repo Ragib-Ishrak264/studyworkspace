@@ -10,9 +10,11 @@ const WORKSPACES_DIR = path.join(__dirname, 'workspaces');
 const REGISTRY_FILE = path.join(WORKSPACES_DIR, 'registry.json');
 
 // Ensure workspaces folder exists
-if (!fs.existsSync(WORKSPACES_DIR)) {
-  fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
-}
+try {
+  if (!fs.existsSync(WORKSPACES_DIR)) {
+    fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+  }
+} catch (e) {}
 
 // Load or create registry.json
 let registry = {
@@ -29,43 +31,47 @@ if (fs.existsSync(REGISTRY_FILE)) {
     console.error('Error reading registry.json, resetting structure', error);
   }
 } else {
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2));
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2));
+  } catch (e) {}
 }
 
 // Setup default workspace folders
 const defaultWSPath = path.join(WORKSPACES_DIR, 'default');
 const defaultWSUploadsPath = path.join(defaultWSPath, 'uploads');
-if (!fs.existsSync(defaultWSPath)) {
-  fs.mkdirSync(defaultWSPath, { recursive: true });
-}
-if (!fs.existsSync(defaultWSUploadsPath)) {
-  fs.mkdirSync(defaultWSUploadsPath, { recursive: true });
-}
+try {
+  if (!fs.existsSync(defaultWSPath)) {
+    fs.mkdirSync(defaultWSPath, { recursive: true });
+  }
+  if (!fs.existsSync(defaultWSUploadsPath)) {
+    fs.mkdirSync(defaultWSUploadsPath, { recursive: true });
+  }
+} catch (e) {}
 
 // --- Legacy Migration Block ---
 const legacyDBFile = path.join(__dirname, 'db.json');
 const legacyUploadsDir = path.join(__dirname, 'uploads');
 const defaultDBFile = path.join(defaultWSPath, 'db.json');
 
-if (fs.existsSync(legacyDBFile)) {
-  try {
+try {
+  if (fs.existsSync(legacyDBFile)) {
     console.log('[MIGRATION] Migrating legacy db.json to workspaces/default/db.json');
     fs.renameSync(legacyDBFile, defaultDBFile);
-  } catch (err) {
-    console.error('Migration of db.json failed', err);
   }
-}
+} catch (err) {}
 
-if (!fs.existsSync(defaultDBFile)) {
-  const initialData = {
-    categories: ['General', 'Work', 'Personal', 'Study', 'Finance'],
-    items: []
-  };
-  fs.writeFileSync(defaultDBFile, JSON.stringify(initialData, null, 2));
-}
+try {
+  if (!fs.existsSync(defaultDBFile)) {
+    const initialData = {
+      categories: ['General', 'Work', 'Personal', 'Study', 'Finance'],
+      items: []
+    };
+    fs.writeFileSync(defaultDBFile, JSON.stringify(initialData, null, 2));
+  }
+} catch (e) {}
 
-if (fs.existsSync(legacyUploadsDir)) {
-  try {
+try {
+  if (fs.existsSync(legacyUploadsDir)) {
     console.log('[MIGRATION] Moving files from legacy uploads directory...');
     const files = fs.readdirSync(legacyUploadsDir);
     files.forEach(file => {
@@ -75,10 +81,8 @@ if (fs.existsSync(legacyUploadsDir)) {
     });
     fs.rmdirSync(legacyUploadsDir);
     console.log('[MIGRATION] Cleaned up legacy uploads folder.');
-  } catch (err) {
-    console.error('Migration of uploads folder failed', err);
   }
-}
+} catch (err) {}
 // --- End Migration Block ---
 
 // Middleware
@@ -551,6 +555,12 @@ app.get('/uploads/:workspaceId/*', (req, res) => {
   } else {
     res.status(404).json({ error: 'File not found' });
   }
+// Fallback to index.html for frontend
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start Server (when run standalone)
