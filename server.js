@@ -553,7 +553,11 @@ app.get('/uploads/:workspaceId/*', (req, res) => {
   }
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Workspace server is running at http://localhost:${PORT}`);
-});
+// Start Server (when run standalone)
+if (require.main === module || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Workspace server is running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
