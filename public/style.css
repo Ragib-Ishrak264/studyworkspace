@@ -1838,3 +1838,226 @@ select option:checked {
   stroke: #f59e0b;
 }
 
+/* -------------------------------------------------------------
+ * Mobile & Android Responsive Design & Off-Canvas Drawer
+ * ------------------------------------------------------------- */
+
+/* App Container Safe Area for Android Notches & Navigation Bars */
+.app-container {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.btn-sidebar-close {
+  display: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-sidebar-close:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-mobile-menu {
+  display: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-mobile-menu:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.btn-pwa-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #38bdf8;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-pwa-install:hover {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: #38bdf8;
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 99;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Tablet & Mobile Screens Breakpoint */
+@media (max-width: 900px) {
+  .app-container {
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 290px;
+    height: 100dvh;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+  }
+
+  .sidebar-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .btn-sidebar-close {
+    display: flex;
+  }
+
+  .btn-mobile-menu {
+    display: flex;
+  }
+
+  .main-content {
+    width: 100%;
+    height: 100dvh;
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding-bottom: 16px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .search-container {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 14px;
+  }
+
+  /* Modal Mobile Adaptations */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-container,
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 90dvh !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Compact Mobile Screens (Smartphones) */
+@media (max-width: 520px) {
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .header-actions {
+    flex-direction: column;
+  }
+
+  .header-actions button {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+  }
+
+  .items-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .card-item {
+    padding: 14px;
+  }
+
+  /* Enlarge touch buttons for Android finger navigation */
+  .btn,
+  .nav-list li,
+  .workspace-selector-container select {
+    min-height: 44px;
+  }
+}
+
+

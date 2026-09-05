@@ -1,0 +1,33 @@
+{
+  "name": "Workspace Hub - Notes, Links & Files",
+  "short_name": "Workspace",
+  "description": "Your personal productivity dashboard to organize links, notes, folders, and documents securely.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Item",
+      "url": "/#new-item",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ]
+}

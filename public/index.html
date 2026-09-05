@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>My Personal Workspace | Local Hub</title>
   <meta name="description" content="A local offline dashboard to organize links, notes, and PDF files securely on your device.">
+  <!-- PWA & Android Meta -->
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Workspace">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,13 +25,19 @@
 </head>
 <body>
   <div class="app-container">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
     
     <!-- Sidebar Navigation -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <div class="logo">
-          <i data-lucide="layout-dashboard" class="logo-icon"></i>
-          <span>Workspace Hub</span>
+        <div class="logo-row">
+          <div class="logo">
+            <i data-lucide="layout-dashboard" class="logo-icon"></i>
+            <span>Workspace Hub</span>
+          </div>
+          <button id="btn-sidebar-close" class="btn-sidebar-close" aria-label="Close Sidebar">
+            <i data-lucide="x"></i>
+          </button>
         </div>
         
         <!-- Workspace Selector -->
@@ -110,8 +125,13 @@
       <!-- Header / Search Bar -->
       <header class="header">
         <div class="header-left">
-          <h1 class="page-title">Workspace Dashboard</h1>
-          <p class="page-subtitle">Your local repository of links, papers, and notes</p>
+          <button id="btn-mobile-menu" class="btn-mobile-menu" aria-label="Open navigation menu">
+            <i data-lucide="menu"></i>
+          </button>
+          <div class="header-title-block">
+            <h1 class="page-title">Workspace Dashboard</h1>
+            <p class="page-subtitle">Your local repository of links, papers, and notes</p>
+          </div>
         </div>
         
         <div class="header-actions">
@@ -119,6 +139,11 @@
             <i data-lucide="search" class="search-icon"></i>
             <input type="text" id="search-input" placeholder="Search title, description, or content..." aria-label="Search items">
           </div>
+
+          <button id="btn-pwa-install" class="btn btn-secondary btn-pwa-install" style="display: none;" title="Install App to Android Device">
+            <i data-lucide="download"></i>
+            <span>Install</span>
+          </button>
           
           <button id="btn-new-item" class="btn btn-primary">
             <i data-lucide="plus-circle"></i>

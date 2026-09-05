@@ -2287,3 +2287,96 @@ const FolderExplorer = (() => {
   });
 })();
 
+// ================================================================
+// Mobile / Android Compatibility & PWA Controller
+// ================================================================
+
+(function initMobileAndPWA() {
+  onReady(() => {
+    // 1. Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => {
+            console.log('[PWA] Service Worker registered successfully:', reg.scope);
+          })
+          .catch(err => {
+            console.warn('[PWA] Service Worker registration failed:', err);
+          });
+      });
+    }
+
+    // 2. Mobile Drawer Navigation
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const btnMobileMenu = document.getElementById('btn-mobile-menu');
+    const btnSidebarClose = document.getElementById('btn-sidebar-close');
+
+    function openSidebar() {
+      if (sidebar) sidebar.classList.add('open');
+      if (backdrop) backdrop.classList.add('active');
+    }
+
+    function closeSidebar() {
+      if (sidebar) sidebar.classList.remove('open');
+      if (backdrop) backdrop.classList.remove('active');
+    }
+
+    if (btnMobileMenu) btnMobileMenu.addEventListener('click', openSidebar);
+    if (btnSidebarClose) btnSidebarClose.addEventListener('click', closeSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+    // Auto-close drawer on mobile when selecting filters or navigating
+    const navItems = document.querySelectorAll('.nav-list li');
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        if (window.innerWidth <= 900) {
+          closeSidebar();
+        }
+      });
+    });
+
+    if (workspaceSelect) {
+      workspaceSelect.addEventListener('change', () => {
+        if (window.innerWidth <= 900) {
+          closeSidebar();
+        }
+      });
+    }
+
+    // 3. PWA Installation Handler
+    let deferredPrompt = null;
+    const btnPwaInstall = document.getElementById('btn-pwa-install');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent automatic mini-infobar on mobile Chrome
+      e.preventDefault();
+      deferredPrompt = e;
+      if (btnPwaInstall) {
+        btnPwaInstall.style.display = 'inline-flex';
+        if (window.lucide) lucide.createIcons();
+      }
+    });
+
+    if (btnPwaInstall) {
+      btnPwaInstall.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('[PWA] User response to install prompt:', outcome);
+        deferredPrompt = null;
+        btnPwaInstall.style.display = 'none';
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      console.log('[PWA] Workspace app was successfully installed on device.');
+      if (btnPwaInstall) btnPwaInstall.style.display = 'none';
+      if (typeof showToast === 'function') {
+        showToast('App installed on your device!');
+      }
+    });
+  });
+})();
+
+
