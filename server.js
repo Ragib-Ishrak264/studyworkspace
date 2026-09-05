@@ -555,6 +555,7 @@ app.get('/uploads/:workspaceId/*', (req, res) => {
   } else {
     res.status(404).json({ error: 'File not found' });
   }
+});
 // Fallback to index.html for frontend
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
