@@ -20,6 +20,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Lucide Icons (Local offline copy) -->
   <script src="lucide.min.js"></script>
+  <!-- Supabase JS Client v2 (Cloud Database & Auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -144,11 +148,56 @@
             <i data-lucide="download"></i>
             <span>Install</span>
           </button>
+
+          <!-- Supabase Cloud Sync / Connect Button -->
+          <button id="btn-supabase-status" class="btn-supabase-status status-offline" title="Supabase Cloud Database & Auth Configuration">
+            <span class="status-indicator-dot" id="supabase-status-dot"></span>
+            <i data-lucide="cloud"></i>
+            <span id="supabase-status-text">Supabase Cloud</span>
+          </button>
           
           <button id="btn-new-item" class="btn btn-primary">
             <i data-lucide="plus-circle"></i>
             <span>Add Item</span>
           </button>
+
+          <!-- User Authentication Profile & Menu -->
+          <div class="user-auth-widget" id="user-auth-widget">
+            <button id="btn-open-auth" class="btn btn-secondary btn-auth-trigger">
+              <i data-lucide="log-in"></i>
+              <span>Sign In</span>
+            </button>
+            <div class="user-profile-menu-container" id="user-profile-menu-container" style="display: none;">
+              <button class="user-profile-btn" id="btn-user-profile" aria-expanded="false" aria-label="User menu">
+                <div class="user-avatar" id="user-avatar-display">U</div>
+                <span class="user-display-name" id="user-display-name">User</span>
+                <i data-lucide="chevron-down" class="user-dropdown-arrow"></i>
+              </button>
+              <div class="user-dropdown-menu" id="user-dropdown-menu" style="display: none;">
+                <div class="user-dropdown-header">
+                  <div class="user-dropdown-avatar" id="user-dropdown-avatar">U</div>
+                  <div class="user-dropdown-info">
+                    <strong id="dropdown-user-name">User Name</strong>
+                    <span id="dropdown-user-email">user@example.com</span>
+                  </div>
+                </div>
+                <div class="user-dropdown-divider"></div>
+                <button class="user-dropdown-item" id="btn-dropdown-profile">
+                  <i data-lucide="user-cog"></i>
+                  <span>Account Settings</span>
+                </button>
+                <button class="user-dropdown-item" id="btn-dropdown-workspace">
+                  <i data-lucide="folder-kanban"></i>
+                  <span>New Workspace</span>
+                </button>
+                <div class="user-dropdown-divider"></div>
+                <button class="user-dropdown-item danger" id="btn-dropdown-logout">
+                  <i data-lucide="log-out"></i>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -613,9 +662,283 @@
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Modal: Authentication (Login / Sign Up / Google OAuth) -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-auth">
+    <div class="modal-card modal-card-auth">
+      <div class="modal-header auth-modal-header">
+        <div class="auth-header-brand">
+          <div class="auth-brand-icon">
+            <i data-lucide="shield-check"></i>
+          </div>
+          <div>
+            <h2 id="auth-modal-title">Welcome to Workspace</h2>
+            <p class="auth-modal-subtitle">Organize your links, documents, and notes securely</p>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-auth-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body auth-modal-body">
+        <!-- Auth Tabs -->
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn active" id="tab-btn-login" data-auth-tab="login">
+            <i data-lucide="log-in"></i> Sign In
+          </button>
+          <button type="button" class="auth-tab-btn" id="tab-btn-register" data-auth-tab="register">
+            <i data-lucide="user-plus"></i> Create Account
+          </button>
+        </div>
+
+        <!-- Google OAuth Section -->
+        <div class="auth-social-section">
+          <button type="button" class="btn-google-auth" id="btn-google-signin">
+            <svg class="google-svg-icon" viewBox="0 0 24 24" width="20" height="20">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span id="google-btn-text">Continue with Google</span>
+          </button>
+          <div id="g_id_signin_hidden" style="display:none;"></div>
+        </div>
+
+        <div class="auth-divider">
+          <span>or continue with email</span>
+        </div>
+
+        <!-- Feedback Alert Container -->
+        <div class="auth-alert" id="auth-alert" style="display: none;">
+          <i data-lucide="alert-circle" id="auth-alert-icon"></i>
+          <span id="auth-alert-message">Error message</span>
+        </div>
+
+        <!-- Sign In Form -->
+        <form id="form-auth-login" class="auth-form-panel active">
+          <div class="form-group">
+            <label for="login-email">Email Address</label>
+            <div class="input-with-icon">
+              <i data-lucide="mail"></i>
+              <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="username">
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="label-with-action">
+              <label for="login-password">Password</label>
+            </div>
+            <div class="input-with-icon input-password-wrapper">
+              <i data-lucide="lock"></i>
+              <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-password" data-target="login-password" aria-label="Toggle password visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-actions-auth">
+            <button type="submit" class="btn btn-primary btn-auth-submit" id="btn-submit-login">
+              <i data-lucide="log-in"></i>
+              <span>Sign In</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-auth-register" class="auth-form-panel" style="display: none;">
+          <div class="form-group">
+            <label for="register-name">Full Name</label>
+            <div class="input-with-icon">
+              <i data-lucide="user"></i>
+              <input type="text" id="register-name" placeholder="Alex Morgan" required autocomplete="name">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="register-email">Email Address</label>
+            <div class="input-with-icon">
+              <i data-lucide="mail"></i>
+              <input type="email" id="register-email" placeholder="you@example.com" required autocomplete="username">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="register-password">Password (Min 6 characters)</label>
+            <div class="input-with-icon input-password-wrapper">
+              <i data-lucide="lock"></i>
+              <input type="password" id="register-password" placeholder="••••••••" minlength="6" required autocomplete="new-password">
+              <button type="button" class="btn-toggle-password" data-target="register-password" aria-label="Toggle password visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="register-confirm-password">Confirm Password</label>
+            <div class="input-with-icon input-password-wrapper">
+              <i data-lucide="check-circle-2"></i>
+              <input type="password" id="register-confirm-password" placeholder="••••••••" minlength="6" required autocomplete="new-password">
+              <button type="button" class="btn-toggle-password" data-target="register-confirm-password" aria-label="Toggle password visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-actions-auth">
+            <button type="submit" class="btn btn-primary btn-auth-submit" id="btn-submit-register">
+              <i data-lucide="user-plus"></i>
+              <span>Create Account</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Quick Guest / Demo Option -->
+        <div class="auth-demo-footer">
+          <button type="button" class="btn-demo-account" id="btn-demo-login">
+            <i data-lucide="sparkles"></i>
+            <span>Try Quick Demo Account</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Account Settings / Profile -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-user-settings">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="user-cog" style="color:var(--accent-primary);"></i>
+          <h2>Account Settings</h2>
+        </div>
+        <button class="modal-close" id="btn-close-settings-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="profile-preview-card">
+          <div class="profile-preview-avatar" id="profile-preview-avatar">U</div>
+          <div class="profile-preview-info">
+            <h3 id="profile-info-name">User Name</h3>
+            <p id="profile-info-email">user@example.com</p>
+            <span class="badge-provider" id="profile-info-provider">Email Account</span>
+          </div>
+        </div>
+
+        <form id="form-update-profile" style="margin-top: 16px;">
+          <div class="form-group">
+            <label for="settings-name">Display Name</label>
+            <input type="text" id="settings-name" required>
+          </div>
+
+          <div id="password-change-section">
+            <div class="auth-divider" style="margin: 16px 0 12px 0;">
+              <span>Change Password (Optional)</span>
+            </div>
+            <div class="form-group">
+              <label for="settings-current-password">Current Password</label>
+              <input type="password" id="settings-current-password" placeholder="Leave blank if unchanged">
+            </div>
+            <div class="form-group">
+              <label for="settings-new-password">New Password (Min 6 chars)</label>
+              <input type="password" id="settings-new-password" placeholder="New password" minlength="6">
+            </div>
+          </div>
+
+          <div class="modal-actions" style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="btn-settings-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-settings-save">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Modal: Supabase Cloud Database & Auth Setup                -->
+  <!-- ========================================================== -->
+  <div class="modal-backdrop" id="modal-supabase-config">
+    <div class="modal-card modal-card-md">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="database" style="color:#3ecf8e;"></i>
+          <h2>Supabase Cloud Database & Auth</h2>
+        </div>
+        <button class="modal-close" id="btn-close-supabase-modal" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="supabase-config-banner">
+          <i data-lucide="cloud-cog"></i>
+          <div>
+            <h4>Real-time Cloud Sync & Multi-Device Login</h4>
+            <p>Connect your Supabase project to enable real-time cloud database, multi-device authentication (log in from mobile, tablet, or laptop anywhere in the world), and cloud PDF storage.</p>
+          </div>
+        </div>
+
+        <form id="form-supabase-config">
+          <div class="form-group">
+            <label for="supabase-project-url">Supabase Project URL</label>
+            <div class="input-with-icon">
+              <i data-lucide="globe"></i>
+              <input type="url" id="supabase-project-url" placeholder="https://xyzcompany.supabase.co" required autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="supabase-anon-key">Supabase Anon Public Key (anon / public)</label>
+            <div class="input-with-icon">
+              <i data-lucide="key"></i>
+              <input type="password" id="supabase-anon-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required autocomplete="off">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-secondary" id="btn-test-supabase">
+                <i data-lucide="activity"></i>
+                <span>Test Connection</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-migrate-to-supabase">
+                <i data-lucide="upload-cloud"></i>
+                <span>Migrate Local Data to Cloud</span>
+              </button>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-supabase">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="btn-save-supabase">
+                <i data-lucide="check"></i>
+                <span>Save & Connect</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div class="auth-divider" style="margin:24px 0 16px 0;">
+          <span>Database SQL Schema Setup (1-Click Copy)</span>
+        </div>
+
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
+          Paste this SQL into your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener" style="color:#3ecf8e; text-decoration:underline;">Supabase SQL Editor</a> to initialize the tables, storage bucket, and row security:
+        </p>
+
+        <div style="position:relative;">
+          <button type="button" class="btn-copy-code" id="btn-copy-schema-sql">
+            <i data-lucide="copy"></i>
+            <span>Copy Schema SQL</span>
+          </button>
+          <pre class="supabase-code-box" id="supabase-sql-preview">-- Click "Copy Schema SQL" to copy the full database setup script</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
+  <!-- Supabase Client & Cloud Manager -->
+  <script src="supabase-client.js"></script>
   <!-- Client JavaScript -->
   <script src="app.js"></script>
 </body>

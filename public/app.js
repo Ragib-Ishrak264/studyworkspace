@@ -9,6 +9,25 @@ let workspaceFolders = [];
 let workspaces = [];
 let activeWorkspaceId = 'default';
 
+// ================================================================
+// Global Fetch Interceptor for Authentication
+// ================================================================
+const _nativeFetch = window.fetch;
+window.fetch = async function(resource, init = {}) {
+  const url = typeof resource === 'string' ? resource : resource.url;
+  const initCopy = { ...init };
+  const headers = new Headers(initCopy.headers || {});
+  
+  const token = localStorage.getItem('workspace_hub_auth_token');
+  if (token && !headers.has('Authorization') && (typeof url === 'string' && url.startsWith('/api/'))) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  initCopy.headers = headers;
+
+  const res = await _nativeFetch.call(this, resource, initCopy);
+  return res;
+};
+
 // DOM Elements - Workspaces
 const workspaceSelect = document.getElementById('workspace-select');
 const btnAddWorkspace = document.getElementById('btn-add-workspace');
@@ -93,10 +112,606 @@ function onReady(fn) {
   }
 }
 
+// ================================================================
+// Authentication & User Session Module
+// ================================================================
+const Auth = (function() {
+  const TOKEN_KEY = 'workspace_hub_auth_token';
+  let currentUser = null;
+  let authToken = localStorage.getItem(TOKEN_KEY) || null;
+
+  // DOM Elements
+  const modalAuth = document.getElementById('modal-auth');
+  const btnCloseAuthModal = document.getElementById('btn-close-auth-modal');
+  const btnOpenAuth = document.getElementById('btn-open-auth');
+  const userProfileMenuContainer = document.getElementById('user-profile-menu-container');
+  const btnUserProfile = document.getElementById('btn-user-profile');
+  const userAvatarDisplay = document.getElementById('user-avatar-display');
+  const userDisplayName = document.getElementById('user-display-name');
+  const userDropdownMenu = document.getElementById('user-dropdown-menu');
+  const userDropdownAvatar = document.getElementById('user-dropdown-avatar');
+  const dropdownUserName = document.getElementById('dropdown-user-name');
+  const dropdownUserEmail = document.getElementById('dropdown-user-email');
+  const btnDropdownProfile = document.getElementById('btn-dropdown-profile');
+  const btnDropdownWorkspace = document.getElementById('btn-dropdown-workspace');
+  const btnDropdownLogout = document.getElementById('btn-dropdown-logout');
+
+  // Auth Modal tabs & forms
+  const tabBtnLogin = document.getElementById('tab-btn-login');
+  const tabBtnRegister = document.getElementById('tab-btn-register');
+  const formAuthLogin = document.getElementById('form-auth-login');
+  const formAuthRegister = document.getElementById('form-auth-register');
+  const authAlert = document.getElementById('auth-alert');
+  const authAlertMessage = document.getElementById('auth-alert-message');
+  const authModalTitle = document.getElementById('auth-modal-title');
+  const btnGoogleSignin = document.getElementById('btn-google-signin');
+  const btnDemoLogin = document.getElementById('btn-demo-login');
+
+  // Account Settings Modal
+  const modalUserSettings = document.getElementById('modal-user-settings');
+  const btnCloseSettingsModal = document.getElementById('btn-close-settings-modal');
+  const btnSettingsCancel = document.getElementById('btn-settings-cancel');
+  const formUpdateProfile = document.getElementById('form-update-profile');
+  const profilePreviewAvatar = document.getElementById('profile-preview-avatar');
+  const profileInfoName = document.getElementById('profile-info-name');
+  const profileInfoEmail = document.getElementById('profile-info-email');
+  const profileInfoProvider = document.getElementById('profile-info-provider');
+  const settingsName = document.getElementById('settings-name');
+  const settingsCurrentPassword = document.getElementById('settings-current-password');
+  const settingsNewPassword = document.getElementById('settings-new-password');
+  const passwordChangeSection = document.getElementById('password-change-section');
+
+  function getAvatarLetter(name, email) {
+    if (name && name.trim()) return name.trim().charAt(0).toUpperCase();
+    if (email && email.trim()) return email.trim().charAt(0).toUpperCase();
+    return 'U';
+  }
+
+  function updateAvatarElement(el, user) {
+    if (!el) return;
+    if (user && user.avatar) {
+      el.textContent = '';
+      el.style.backgroundImage = `url("${user.avatar}")`;
+    } else {
+      el.style.backgroundImage = 'none';
+      el.textContent = user ? getAvatarLetter(user.name, user.email) : 'U';
+    }
+  }
+
+  function updateUIForUser(user) {
+    currentUser = user;
+    if (user) {
+      if (btnOpenAuth) btnOpenAuth.style.display = 'none';
+      if (userProfileMenuContainer) userProfileMenuContainer.style.display = 'block';
+      if (userDisplayName) userDisplayName.textContent = user.name || 'User';
+      if (dropdownUserName) dropdownUserName.textContent = user.name || 'User';
+      if (dropdownUserEmail) dropdownUserEmail.textContent = user.email || '';
+      
+      updateAvatarElement(userAvatarDisplay, user);
+      updateAvatarElement(userDropdownAvatar, user);
+      updateAvatarElement(profilePreviewAvatar, user);
+
+      if (profileInfoName) profileInfoName.textContent = user.name || 'User';
+      if (profileInfoEmail) profileInfoEmail.textContent = user.email || '';
+      if (profileInfoProvider) {
+        profileInfoProvider.textContent = user.provider === 'google' ? 'Google Account' : 'Email Account';
+      }
+      if (settingsName) settingsName.value = user.name || '';
+      if (passwordChangeSection) {
+        passwordChangeSection.style.display = user.provider === 'google' ? 'none' : 'block';
+      }
+    } else {
+      if (btnOpenAuth) btnOpenAuth.style.display = 'inline-flex';
+      if (userProfileMenuContainer) userProfileMenuContainer.style.display = 'none';
+      if (userDropdownMenu) userDropdownMenu.style.display = 'none';
+    }
+    safeCreateIcons();
+  }
+
+  function openAuthModal(tab = 'login') {
+    hideAuthAlert();
+    switchTab(tab);
+    if (modalAuth) modalAuth.classList.add('active');
+    safeCreateIcons();
+  }
+
+  function closeAuthModal() {
+    if (modalAuth) modalAuth.classList.remove('active');
+    hideAuthAlert();
+  }
+
+  function switchTab(tab) {
+    hideAuthAlert();
+    if (tab === 'login') {
+      if (tabBtnLogin) tabBtnLogin.classList.add('active');
+      if (tabBtnRegister) tabBtnRegister.classList.remove('active');
+      if (formAuthLogin) formAuthLogin.style.display = 'block';
+      if (formAuthRegister) formAuthRegister.style.display = 'none';
+      if (authModalTitle) authModalTitle.textContent = 'Welcome Back';
+    } else {
+      if (tabBtnLogin) tabBtnLogin.classList.remove('active');
+      if (tabBtnRegister) tabBtnRegister.classList.add('active');
+      if (formAuthLogin) formAuthLogin.style.display = 'none';
+      if (formAuthRegister) formAuthRegister.style.display = 'block';
+      if (authModalTitle) authModalTitle.textContent = 'Create Your Account';
+    }
+    safeCreateIcons();
+  }
+
+  function showAuthAlert(message, type = 'error') {
+    if (!authAlert || !authAlertMessage) return;
+    authAlert.className = `auth-alert ${type}`;
+    authAlertMessage.textContent = message;
+    authAlert.style.display = 'flex';
+    safeCreateIcons();
+  }
+
+  function hideAuthAlert() {
+    if (authAlert) authAlert.style.display = 'none';
+  }
+
+  async function handleLogin(email, password) {
+    hideAuthAlert();
+    try {
+      // 1. If Supabase is configured, use Supabase Cloud Auth
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        const { user, session } = await window.SupabaseManager.signIn(email, password);
+        const userData = {
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0] || 'User',
+          avatar: user.user_metadata?.avatar_url || null,
+          provider: 'supabase'
+        };
+        setSession(session.access_token, userData);
+        closeAuthModal();
+        if (typeof showToast === 'function') {
+          showToast(`Welcome back, ${userData.name}! (Supabase Cloud)`, 'shield-check');
+        }
+        await initWorkspaceHub();
+        return true;
+      }
+
+      // 2. Local Fallback Auth
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showAuthAlert(data.error || 'Failed to sign in');
+        return false;
+      }
+      setSession(data.token, data.user);
+      closeAuthModal();
+      if (typeof showToast === 'function') {
+        showToast(`Welcome back, ${data.user.name}!`, 'shield-check');
+      }
+      await initWorkspaceHub();
+      return true;
+    } catch (err) {
+      console.error('Login error:', err);
+      showAuthAlert(err.message || 'Failed to sign in. Please check your credentials.');
+      return false;
+    }
+  }
+
+  async function handleRegister(name, email, password) {
+    hideAuthAlert();
+    try {
+      // 1. If Supabase is configured, use Supabase Cloud Auth
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        const { user, session } = await window.SupabaseManager.signUp(name, email, password);
+        const userData = {
+          id: user.id,
+          email: user.email,
+          name: name.trim(),
+          avatar: null,
+          provider: 'supabase'
+        };
+        const token = session ? session.access_token : `sb_user_${user.id}`;
+        setSession(token, userData);
+        closeAuthModal();
+        if (typeof showToast === 'function') {
+          showToast(`Account created on Supabase! Welcome, ${name}!`, 'check-circle-2');
+        }
+        await initWorkspaceHub();
+        return true;
+      }
+
+      // 2. Local Fallback Auth
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showAuthAlert(data.error || 'Failed to create account');
+        return false;
+      }
+      setSession(data.token, data.user);
+      closeAuthModal();
+      if (typeof showToast === 'function') {
+        showToast(`Account created! Welcome, ${data.user.name}!`, 'check-circle-2');
+      }
+      await initWorkspaceHub();
+      return true;
+    } catch (err) {
+      console.error('Register error:', err);
+      showAuthAlert(err.message || 'Failed to create account. Please try again.');
+      return false;
+    }
+  }
+
+  async function handleGoogleAuth(credential, profile) {
+    hideAuthAlert();
+    try {
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        await window.SupabaseManager.signInWithGoogle();
+        return true;
+      }
+
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential, profile })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showAuthAlert(data.error || 'Google Sign-In failed');
+        return false;
+      }
+      setSession(data.token, data.user);
+      closeAuthModal();
+      if (typeof showToast === 'function') {
+        showToast(`Signed in as ${data.user.name}!`, 'shield-check');
+      }
+      await initWorkspaceHub();
+      return true;
+    } catch (err) {
+      console.error('Google Auth error:', err);
+      showAuthAlert('Google Sign-In error. Please try again.');
+      return false;
+    }
+  }
+
+  function setSession(token, user) {
+    authToken = token;
+    currentUser = user;
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+    updateUIForUser(user);
+  }
+
+  async function clearSession() {
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      try {
+        await window.SupabaseManager.signOut();
+      } catch (e) {}
+    }
+    authToken = null;
+    currentUser = null;
+    localStorage.removeItem(TOKEN_KEY);
+    updateUIForUser(null);
+  }
+
+  async function checkSession() {
+    // 1. Check Supabase session first if Supabase is active
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      try {
+        const session = await window.SupabaseManager.getSession();
+        if (session && session.user) {
+          const u = session.user;
+          const user = {
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.name || u.user_metadata?.full_name || u.email.split('@')[0] || 'User',
+            avatar: u.user_metadata?.avatar_url || null,
+            provider: 'supabase'
+          };
+          setSession(session.access_token, user);
+          return user;
+        }
+      } catch (e) {
+        console.warn('Supabase checkSession warning:', e);
+      }
+    }
+
+    // 2. Fallback check local session
+    if (!authToken) {
+      updateUIForUser(null);
+      return null;
+    }
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        updateUIForUser(data.user);
+        return data.user;
+      } else {
+        clearSession();
+        return null;
+      }
+    } catch (e) {
+      console.warn('Check session warning:', e);
+      return null;
+    }
+  }
+
+  function setupEvents() {
+    // Password show/hide toggle
+    document.querySelectorAll('.btn-toggle-password').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-target');
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        btn.innerHTML = `<i data-lucide="${isPassword ? 'eye-off' : 'eye'}"></i>`;
+        safeCreateIcons();
+      });
+    });
+
+    // Auth modal open/close
+    if (btnOpenAuth) {
+      btnOpenAuth.addEventListener('click', () => openAuthModal('login'));
+    }
+    if (btnCloseAuthModal) {
+      btnCloseAuthModal.addEventListener('click', closeAuthModal);
+    }
+    if (modalAuth) {
+      modalAuth.addEventListener('click', (e) => {
+        if (e.target === modalAuth) closeAuthModal();
+      });
+    }
+
+    // Tab buttons
+    if (tabBtnLogin) {
+      tabBtnLogin.addEventListener('click', () => switchTab('login'));
+    }
+    if (tabBtnRegister) {
+      tabBtnRegister.addEventListener('click', () => switchTab('register'));
+    }
+
+    // Login submit
+    if (formAuthLogin) {
+      formAuthLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const submitBtn = document.getElementById('btn-submit-login');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Signing In...</span>';
+        await handleLogin(email, password);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+        safeCreateIcons();
+      });
+    }
+
+    // Register submit
+    if (formAuthRegister) {
+      formAuthRegister.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const confirmPassword = document.getElementById('register-confirm-password').value;
+
+        if (password !== confirmPassword) {
+          showAuthAlert('Passwords do not match');
+          return;
+        }
+
+        const submitBtn = document.getElementById('btn-submit-register');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Creating Account...</span>';
+        await handleRegister(name, email, password);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+        safeCreateIcons();
+      });
+    }
+
+    // Google Sign-In button
+    if (btnGoogleSignin) {
+      btnGoogleSignin.addEventListener('click', () => {
+        // Try Google Identity Services
+        if (window.google && window.google.accounts && window.google.accounts.id) {
+          try {
+            google.accounts.id.prompt((notification) => {
+              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                fallbackGoogleDialog();
+              }
+            });
+            return;
+          } catch (e) {
+            console.warn('Google One-Tap exception, using prompt dialog:', e);
+          }
+        }
+        fallbackGoogleDialog();
+      });
+    }
+
+    function fallbackGoogleDialog() {
+      const email = prompt('Enter your Google Email address for Google Sign-In:', currentUser?.email || 'user@gmail.com');
+      if (email && email.includes('@')) {
+        const name = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        handleGoogleAuth(null, {
+          email: email.trim(),
+          name: name,
+          picture: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
+          id: `google_${Date.now()}`
+        });
+      }
+    }
+
+    // Quick Demo account
+    if (btnDemoLogin) {
+      btnDemoLogin.addEventListener('click', () => {
+        handleLogin('demo@workspace.local', 'demo1234').then(success => {
+          if (!success) {
+            // If demo account not registered yet, auto-register it!
+            handleRegister('Demo User', 'demo@workspace.local', 'demo1234');
+          }
+        });
+      });
+    }
+
+    // User Dropdown toggle
+    if (btnUserProfile) {
+      btnUserProfile.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = userDropdownMenu.style.display === 'none' || !userDropdownMenu.style.display;
+        userDropdownMenu.style.display = isHidden ? 'block' : 'none';
+        btnUserProfile.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      });
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+      if (userDropdownMenu && !userDropdownMenu.contains(e.target) && !btnUserProfile.contains(e.target)) {
+        userDropdownMenu.style.display = 'none';
+        if (btnUserProfile) btnUserProfile.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // Account Settings Modal
+    if (btnDropdownProfile) {
+      btnDropdownProfile.addEventListener('click', () => {
+        if (userDropdownMenu) userDropdownMenu.style.display = 'none';
+        if (modalUserSettings) modalUserSettings.classList.add('active');
+        safeCreateIcons();
+      });
+    }
+
+    if (btnDropdownWorkspace) {
+      btnDropdownWorkspace.addEventListener('click', () => {
+        if (userDropdownMenu) userDropdownMenu.style.display = 'none';
+        if (btnAddWorkspace) btnAddWorkspace.click();
+      });
+    }
+
+    if (btnCloseSettingsModal) {
+      btnCloseSettingsModal.addEventListener('click', () => modalUserSettings.classList.remove('active'));
+    }
+    if (btnSettingsCancel) {
+      btnSettingsCancel.addEventListener('click', () => modalUserSettings.classList.remove('active'));
+    }
+    if (modalUserSettings) {
+      modalUserSettings.addEventListener('click', (e) => {
+        if (e.target === modalUserSettings) modalUserSettings.classList.remove('active');
+      });
+    }
+
+    // Update Profile Submit
+    if (formUpdateProfile) {
+      formUpdateProfile.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = settingsName.value.trim();
+        const currentPassword = settingsCurrentPassword ? settingsCurrentPassword.value : '';
+        const newPassword = settingsNewPassword ? settingsNewPassword.value : '';
+
+        try {
+          const res = await fetch('/api/auth/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, currentPassword, newPassword })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || 'Failed to update profile');
+            return;
+          }
+          setSession(data.token, data.user);
+          modalUserSettings.classList.remove('active');
+          if (settingsCurrentPassword) settingsCurrentPassword.value = '';
+          if (settingsNewPassword) settingsNewPassword.value = '';
+          if (typeof showToast === 'function') {
+            showToast('Profile updated successfully!', 'check');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error updating profile');
+        }
+      });
+    }
+
+    // Logout
+    if (btnDropdownLogout) {
+      btnDropdownLogout.addEventListener('click', async () => {
+        if (userDropdownMenu) userDropdownMenu.style.display = 'none';
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {}
+        clearSession();
+        if (typeof showToast === 'function') {
+          showToast('Signed out successfully', 'log-out');
+        }
+        await initWorkspaceHub();
+        openAuthModal('login');
+      });
+    }
+  }
+
+  return {
+    getToken: () => authToken,
+    getUser: () => currentUser,
+    checkSession,
+    openAuthModal,
+    closeAuthModal,
+    setupEvents,
+    handleGoogleAuth,
+    setSession,
+    clearSession,
+    updateUI: () => updateUIForUser(currentUser)
+  };
+})();
+
 // Load data on page load
-onReady(() => {
+onReady(async () => {
   safeCreateIcons();
-  initWorkspaceHub();
+  
+  // Initialize Supabase Manager if available
+  if (window.SupabaseManager) {
+    await window.SupabaseManager.init();
+    
+    // Listen for Auth state changes across tabs/devices
+    const client = window.SupabaseManager.getClient();
+    if (client) {
+      client.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (session && session.user) {
+            const u = session.user;
+            Auth.setSession(session.access_token, {
+              id: u.id,
+              email: u.email,
+              name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
+              avatar: u.user_metadata?.avatar_url || null,
+              provider: 'supabase'
+            });
+            await initWorkspaceHub();
+          }
+        } else if (event === 'SIGNED_OUT') {
+          Auth.clearSession();
+          await initWorkspaceHub();
+        }
+      });
+    }
+  }
+
+  Auth.setupEvents();
+  await Auth.checkSession();
+  await initWorkspaceHub();
   setupEventListeners();
 });
 
@@ -109,17 +724,34 @@ async function initWorkspaceHub() {
 // Fetch list of workspaces
 async function fetchWorkspaces() {
   try {
+    // 1. Supabase Cloud Workspaces
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      const sbData = await window.SupabaseManager.fetchWorkspaces();
+      if (sbData && sbData.workspaces) {
+        workspaces = sbData.workspaces;
+        if (!workspaces.some(w => w.id === activeWorkspaceId)) {
+          activeWorkspaceId = sbData.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
+        }
+        window.workspaces = workspaces;
+        window.activeWorkspaceId = activeWorkspaceId;
+        renderWorkspacesDropdown();
+        return;
+      }
+    }
+
+    // 2. Local Fallback Workspaces
     const response = await fetch('/api/workspaces');
     if (!response.ok) throw new Error('Failed to load workspaces');
     
     const data = await response.json();
-    workspaces = data.workspaces;
-    activeWorkspaceId = data.activeWorkspace;
+    workspaces = data.workspaces || [];
+    activeWorkspaceId = data.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
     
+    window.workspaces = workspaces;
+    window.activeWorkspaceId = activeWorkspaceId;
     renderWorkspacesDropdown();
   } catch (error) {
     console.error('Error fetching workspaces:', error);
-    alert('Error loading workspace registry. Make sure server.js is running!');
   }
 }
 
@@ -148,6 +780,31 @@ function renderWorkspacesDropdown() {
 // Fetch all items and root folders for active workspace
 async function fetchWorkspaceData() {
   try {
+    // 1. Supabase Cloud Data & Realtime Sync
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      const sbData = await window.SupabaseManager.fetchWorkspaceData(activeWorkspaceId);
+      if (sbData) {
+        dbData = {
+          categories: sbData.categories || ['General'],
+          items: sbData.items || []
+        };
+        workspaceFolders = sbData.folders || [];
+        window.dbData = dbData;
+        window.activeWorkspaceId = activeWorkspaceId;
+
+        // Subscribe to real-time changes
+        window.SupabaseManager.subscribeRealtime(activeWorkspaceId, () => {
+          fetchWorkspaceData();
+        });
+
+        populateCategoriesDropdowns();
+        resetFilters();
+        updateUI();
+        return;
+      }
+    }
+
+    // 2. Local Fallback Data
     const [dataRes, foldersRes] = await Promise.all([
       fetch(`/api/workspaces/${activeWorkspaceId}/data`),
       fetch(`/api/workspaces/${activeWorkspaceId}/folders`).catch(() => null)
@@ -155,6 +812,8 @@ async function fetchWorkspaceData() {
     if (!dataRes.ok) throw new Error('Failed to fetch workspace items');
     
     dbData = await dataRes.json();
+    window.dbData = dbData;
+    window.activeWorkspaceId = activeWorkspaceId;
     
     if (foldersRes && foldersRes.ok) {
       const folderTree = await foldersRes.json();
@@ -420,15 +1079,19 @@ async function deleteItem(itemId) {
   }
 
   try {
-    const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items/${itemId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Delete failed');
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      await window.SupabaseManager.deleteItem(activeWorkspaceId, itemId);
+    } else {
+      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items/${itemId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Delete failed');
+    }
     
     // Update local copy and render
     dbData.items = dbData.items.filter(item => item.id !== itemId);
     updateUI();
   } catch (error) {
     console.error('Error deleting item:', error);
-    alert('Failed to delete item.');
+    alert('Failed to delete item: ' + error.message);
   }
 }
 
@@ -984,18 +1647,21 @@ function setupEventListeners() {
     const name = document.getElementById('workspace-name').value;
     
     try {
-      const response = await fetch('/api/workspaces', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create workspace');
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        await window.SupabaseManager.createWorkspace(name);
+      } else {
+        const response = await fetch('/api/workspaces', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create workspace');
+        }
       }
 
-      const data = await response.json();
       modalAddWorkspace.classList.remove('active');
       formAddWorkspace.reset();
       
@@ -1014,22 +1680,26 @@ function setupEventListeners() {
       return alert('Cannot delete the default workspace');
     }
 
-    const wsName = workspaceSelect.options[workspaceSelect.selectedIndex].text;
+    const wsName = workspaceSelect.options[workspaceSelect.selectedIndex] ? workspaceSelect.options[workspaceSelect.selectedIndex].text : 'Active Workspace';
     if (!confirm(`CAUTION: Are you sure you want to delete the workspace "${wsName}"?\n\nThis will permanently delete ALL links, notes, and uploaded PDF files inside it. This cannot be undone.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete workspace');
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        await window.SupabaseManager.deleteWorkspace(activeWorkspaceId);
+      } else {
+        const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Failed to delete workspace');
+      }
       
       await fetchWorkspaces();
       await fetchWorkspaceData();
     } catch (error) {
       console.error(error);
-      alert('Error deleting workspace');
+      alert('Error deleting workspace: ' + error.message);
     }
   });
 
@@ -1147,22 +1817,34 @@ function setupEventListeners() {
     const category = document.getElementById('link-category').value;
 
     try {
-      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'link', title, url, description, category })
-      });
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        const newItem = await window.SupabaseManager.addItem(activeWorkspaceId, {
+          type: 'link',
+          title,
+          url,
+          description,
+          category
+        });
+        dbData.items.unshift(newItem);
+      } else {
+        const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'link', title, url, description, category })
+        });
 
-      if (!response.ok) throw new Error('Failed to save link');
-      const newItem = await response.json();
+        if (!response.ok) throw new Error('Failed to save link');
+        const newItem = await response.json();
+        dbData.items.push(newItem);
+      }
       
-      dbData.items.push(newItem);
       modalAddItem.classList.remove('active');
       formAddLink.reset();
       updateUI();
+      if (typeof showToast === 'function') showToast('Bookmark saved successfully!');
     } catch (error) {
       console.error(error);
-      alert('Error saving bookmark link');
+      alert('Error saving bookmark link: ' + error.message);
     }
   });
 
@@ -1174,22 +1856,33 @@ function setupEventListeners() {
     const category = document.getElementById('note-category').value;
 
     try {
-      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'note', title, content, category })
-      });
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        const newItem = await window.SupabaseManager.addItem(activeWorkspaceId, {
+          type: 'note',
+          title,
+          content,
+          category
+        });
+        dbData.items.unshift(newItem);
+      } else {
+        const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'note', title, content, category })
+        });
 
-      if (!response.ok) throw new Error('Failed to save note');
-      const newItem = await response.json();
+        if (!response.ok) throw new Error('Failed to save note');
+        const newItem = await response.json();
+        dbData.items.push(newItem);
+      }
       
-      dbData.items.push(newItem);
       modalAddItem.classList.remove('active');
       formAddNote.reset();
       updateUI();
+      if (typeof showToast === 'function') showToast('Note saved successfully!');
     } catch (error) {
       console.error(error);
-      alert('Error saving note');
+      alert('Error saving note: ' + error.message);
     }
   });
 
@@ -1199,22 +1892,31 @@ function setupEventListeners() {
     const name = document.getElementById('category-name').value;
 
     try {
-      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/categories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        await window.SupabaseManager.addCategory(activeWorkspaceId, name);
+        if (!dbData.categories.includes(name)) {
+          dbData.categories.push(name);
+        }
+      } else {
+        const response = await fetch(`/api/workspaces/${activeWorkspaceId}/categories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create category');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create category');
+        }
+
+        const data = await response.json();
+        dbData.categories = data.categories;
       }
-
-      const data = await response.json();
-      dbData.categories = data.categories;
+      
       modalAddCategory.classList.remove('active');
       populateCategoriesDropdowns();
       updateUI();
+      if (typeof showToast === 'function') showToast(`Category "${name}" created!`);
     } catch (error) {
       console.error(error);
       alert(error.message || 'Error creating category');
@@ -1237,45 +1939,55 @@ function setupEventListeners() {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       uploadProgressText.textContent = `Uploading ${i + 1} of ${files.length}: ${file.name}…`;
-      uploadProgressFill.style.width = '0%';
+      uploadProgressFill.style.width = '20%';
 
-      await new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        // Only apply custom title to single-file uploads
-        formData.append('title', files.length === 1 ? title : '');
-        formData.append('description', files.length === 1 ? description : '');
-        formData.append('category', category);
+      try {
+        if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+          uploadProgressFill.style.width = '60%';
+          const { item } = await window.SupabaseManager.uploadFile(activeWorkspaceId, file);
+          dbData.items.unshift(item);
+          uploadProgressFill.style.width = '100%';
+        } else {
+          await new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', files.length === 1 ? title : '');
+            formData.append('description', files.length === 1 ? description : '');
+            formData.append('category', category);
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `/api/workspaces/${activeWorkspaceId}/upload`, true);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/api/workspaces/${activeWorkspaceId}/upload`, true);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const pct = Math.round((event.loaded / event.total) * 100);
-            uploadProgressFill.style.width = pct + '%';
-            uploadProgressText.textContent = `Uploading ${i + 1} of ${files.length}: ${file.name} — ${pct}%`;
-          }
-        };
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const pct = Math.round((event.loaded / event.total) * 100);
+                uploadProgressFill.style.width = pct + '%';
+                uploadProgressText.textContent = `Uploading ${i + 1} of ${files.length}: ${file.name} — ${pct}%`;
+              }
+            };
 
-        xhr.onload = () => {
-          if (xhr.status === 201) {
-            const newItem = JSON.parse(xhr.responseText);
-            dbData.items.push(newItem);
-            resolve();
-          } else {
-            alert(`Failed to upload "${file.name}". Error: ` + xhr.responseText);
-            reject(new Error(xhr.responseText));
-          }
-        };
+            xhr.onload = () => {
+              if (xhr.status === 201) {
+                const newItem = JSON.parse(xhr.responseText);
+                dbData.items.push(newItem);
+                resolve();
+              } else {
+                alert(`Failed to upload "${file.name}". Error: ` + xhr.responseText);
+                reject(new Error(xhr.responseText));
+              }
+            };
 
-        xhr.onerror = () => {
-          alert(`Upload of "${file.name}" failed due to a network error.`);
-          reject(new Error('Network error'));
-        };
+            xhr.onerror = () => {
+              alert(`Upload of "${file.name}" failed due to a network error.`);
+              reject(new Error('Network error'));
+            };
 
-        xhr.send(formData);
-      }).catch(() => { /* continue with remaining files */ });
+            xhr.send(formData);
+          });
+        }
+      } catch (uploadError) {
+        console.warn('File upload warning:', uploadError);
+      }
     }
 
     uploadProgressText.textContent = `Done! ${files.length} file(s) uploaded.`;
@@ -1286,7 +1998,7 @@ function setupEventListeners() {
       formUploadFile.reset();
       resetFileDropzone();
       updateUI();
-    }, 800);
+    }, 600);
   });
 }
 
