@@ -208,10 +208,27 @@ const Auth = (function() {
     safeCreateIcons();
   }
 
-  function openAuthModal(tab = 'login') {
+  function openAuthModal(tab = 'login', { allowClose = false } = {}) {
     hideAuthAlert();
     switchTab(tab);
     if (modalAuth) modalAuth.classList.add('active');
+
+    // Show/hide close button depending on whether login is mandatory
+    const closeBtn = document.getElementById('btn-close-auth-modal');
+    if (closeBtn) closeBtn.style.display = allowClose ? 'inline-flex' : 'none';
+
+    // Also block backdrop click when not closeable
+    if (modalAuth) {
+      modalAuth._allowClose = allowClose;
+    }
+
+    // Hide demo button when Supabase is configured (real accounts only)
+    const demoFooter = document.getElementById('auth-demo-footer');
+    if (demoFooter) {
+      const sbConfigured = window.SupabaseManager && window.SupabaseManager.isConfigured();
+      demoFooter.style.display = sbConfigured ? 'none' : 'block';
+    }
+
     safeCreateIcons();
   }
 
@@ -266,7 +283,7 @@ const Auth = (function() {
         setSession(session.access_token, userData);
         closeAuthModal();
         if (typeof showToast === 'function') {
-          showToast(`Welcome back, ${userData.name}! (Supabase Cloud)`, 'shield-check');
+          showToast(`Welcome back, ${userData.name}!`, 'shield-check');
         }
         await initWorkspaceHub();
         return true;
@@ -314,7 +331,7 @@ const Auth = (function() {
         setSession(token, userData);
         closeAuthModal();
         if (typeof showToast === 'function') {
-          showToast(`Account created on Supabase! Welcome, ${name}!`, 'check-circle-2');
+          showToast(`Account created! Welcome, ${name}! ☁️ Your workspace is cloud-synced.`, 'check-circle-2');
         }
         await initWorkspaceHub();
         return true;
@@ -461,14 +478,16 @@ const Auth = (function() {
 
     // Auth modal open/close
     if (btnOpenAuth) {
-      btnOpenAuth.addEventListener('click', () => openAuthModal('login'));
+      // Header Sign In button — user voluntarily opens it, can close it
+      btnOpenAuth.addEventListener('click', () => openAuthModal('login', { allowClose: true }));
     }
     if (btnCloseAuthModal) {
       btnCloseAuthModal.addEventListener('click', closeAuthModal);
     }
     if (modalAuth) {
       modalAuth.addEventListener('click', (e) => {
-        if (e.target === modalAuth) closeAuthModal();
+        // Only close on backdrop click if modal was opened with allowClose
+        if (e.target === modalAuth && modalAuth._allowClose) closeAuthModal();
       });
     }
 
@@ -653,11 +672,15 @@ const Auth = (function() {
         try {
           await fetch('/api/auth/logout', { method: 'POST' });
         } catch (e) {}
-        clearSession();
+        await clearSession();
         if (typeof showToast === 'function') {
           showToast('Signed out successfully', 'log-out');
         }
-        await initWorkspaceHub();
+        // Clear workspace UI
+        dbData = { categories: [], items: [] };
+        workspaces = [];
+        if (typeof renderItems === 'function') renderItems();
+        // Always show auth modal after logout
         openAuthModal('login');
       });
     }
@@ -680,11 +703,14 @@ const Auth = (function() {
 // Load data on page load
 onReady(async () => {
   safeCreateIcons();
-  
-  // Initialize Supabase Manager if available
+
+  // Show loading overlay while app initializes
+  showAppLoading(true);
+
+  // Initialize Supabase Manager — fetches keys from server .env
   if (window.SupabaseManager) {
     await window.SupabaseManager.init();
-    
+
     // Listen for Auth state changes across tabs/devices
     const client = window.SupabaseManager.getClient();
     if (client) {
@@ -699,21 +725,80 @@ onReady(async () => {
               avatar: u.user_metadata?.avatar_url || null,
               provider: 'supabase'
             });
+            showAppLoading(false);
             await initWorkspaceHub();
           }
         } else if (event === 'SIGNED_OUT') {
           Auth.clearSession();
           await initWorkspaceHub();
+          // If Supabase is configured, force re-login
+          if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+            showAppLoading(false);
+            Auth.openAuthModal('login');
+          }
         }
       });
     }
   }
 
   Auth.setupEvents();
-  await Auth.checkSession();
+  const loggedInUser = await Auth.checkSession();
+
+  // ── KEY BEHAVIOUR ──
+  // If Supabase is configured but no one is logged in → show login screen
+  if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+    if (!loggedInUser) {
+      showAppLoading(false);
+      Auth.openAuthModal('login');
+      // Show empty workspace shell but blocked
+      setupEventListeners();
+      return; // don't load any data
+    }
+  }
+
+  showAppLoading(false);
   await initWorkspaceHub();
   setupEventListeners();
 });
+
+// Show/hide a full-screen loading overlay during startup
+function showAppLoading(show) {
+  let overlay = document.getElementById('app-startup-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'app-startup-overlay';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:9999',
+      'background:var(--bg-base, #0b0f19)',
+      'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center',
+      'gap:16px', 'transition:opacity 0.3s ease'
+    ].join(';');
+    overlay.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        <span style="font-family:Outfit,sans-serif;font-size:24px;font-weight:700;color:#e2e8f0;letter-spacing:-0.5px;">Workspace Hub</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <span style="width:8px;height:8px;background:#6366f1;border-radius:50%;animation:dotPulse 1.2s ease-in-out infinite;"></span>
+        <span style="width:8px;height:8px;background:#6366f1;border-radius:50%;animation:dotPulse 1.2s ease-in-out 0.2s infinite;"></span>
+        <span style="width:8px;height:8px;background:#6366f1;border-radius:50%;animation:dotPulse 1.2s ease-in-out 0.4s infinite;"></span>
+      </div>
+      <style>@keyframes dotPulse{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}</style>
+    `;
+    document.body.appendChild(overlay);
+  }
+  if (show) {
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  } else {
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.style.display = 'none'; }, 300);
+  }
+}
 
 // Initialize workspace listing and then load active data
 async function initWorkspaceHub() {

@@ -149,8 +149,8 @@
             <span>Install</span>
           </button>
 
-          <!-- Supabase Cloud Sync / Connect Button -->
-          <button id="btn-supabase-status" class="btn-supabase-status status-offline" title="Supabase Cloud Database & Auth Configuration">
+          <!-- Supabase Cloud Sync / Connect Button (shown only when needed) -->
+          <button id="btn-supabase-status" class="btn-supabase-status status-offline" title="Supabase Cloud Database & Auth Configuration" style="display:none;">
             <span class="status-indicator-dot" id="supabase-status-dot"></span>
             <i data-lucide="cloud"></i>
             <span id="supabase-status-text">Supabase Cloud</span>
@@ -670,14 +670,15 @@
       <div class="modal-header auth-modal-header">
         <div class="auth-header-brand">
           <div class="auth-brand-icon">
-            <i data-lucide="shield-check"></i>
+            <i data-lucide="layout-dashboard"></i>
           </div>
           <div>
-            <h2 id="auth-modal-title">Welcome to Workspace</h2>
-            <p class="auth-modal-subtitle">Organize your links, documents, and notes securely</p>
+            <h2 id="auth-modal-title">Welcome to Workspace Hub</h2>
+            <p class="auth-modal-subtitle">Sign in to access your cloud-synced workspace from any device</p>
           </div>
         </div>
-        <button class="modal-close" id="btn-close-auth-modal" aria-label="Close">
+        <!-- Close button only shown when user is already logged in (via JS) -->
+        <button class="modal-close" id="btn-close-auth-modal" aria-label="Close" style="display:none;">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -790,8 +791,8 @@
           </div>
         </form>
 
-        <!-- Quick Guest / Demo Option -->
-        <div class="auth-demo-footer">
+        <!-- Quick Guest / Demo Option - hidden when Supabase is configured -->
+        <div class="auth-demo-footer" id="auth-demo-footer">
           <button type="button" class="btn-demo-account" id="btn-demo-login">
             <i data-lucide="sparkles"></i>
             <span>Try Quick Demo Account</span>
