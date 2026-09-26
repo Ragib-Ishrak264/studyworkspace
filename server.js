@@ -1,4 +1,23 @@
-require('dotenv').config();
+// Load .env manually — ensures our values always win over any pre-injected env vars
+(function loadEnv() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const envFile = path.join(__dirname, '.env');
+    const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      process.env[key] = value; // Always override
+    }
+  } catch (e) {
+    console.warn('[ENV] Could not load .env file:', e.message);
+  }
+})();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
