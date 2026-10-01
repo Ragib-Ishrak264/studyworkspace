@@ -59,7 +59,7 @@ try {
   if (!fs.existsSync(WORKSPACES_DIR)) {
     fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
   }
-} catch (e) {}
+} catch (e) { }
 
 // ================= USER STORAGE & HELPERS =================
 function readUsers() {
@@ -85,17 +85,68 @@ function writeUsers(users) {
   }
 }
 
+function normalizeUserRole(role) {
+  const value = String(role || '').trim().toLowerCase();
+  return value === 'admin' ? 'admin' : 'client';
+}
+
+function sanitizeUser(user) {
+  if (!user) return user;
+  return {
+    ...user,
+    role: normalizeUserRole(user.role),
+    provider: user.provider || 'local'
+  };
+}
+
 function generateUserToken(user) {
+  const safeUser = sanitizeUser(user);
   return jwt.sign(
     {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar || null
+      id: safeUser.id,
+      email: safeUser.email,
+      name: safeUser.name,
+      avatar: safeUser.avatar || null,
+      role: safeUser.role,
+      provider: safeUser.provider
     },
     JWT_SECRET,
     { expiresIn: '30d' }
   );
+}
+
+async function ensureDefaultAdminUser() {
+  const users = readUsers();
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@workspace.local').trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
+
+  let adminUser = users.find(u => u.email && u.email.toLowerCase() === adminEmail);
+
+  if (!adminUser) {
+    adminUser = {
+      id: `admin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: 'Site Admin',
+      email: adminEmail,
+      password: await bcrypt.hash(adminPassword, 10),
+      provider: 'local',
+      role: 'admin',
+      avatar: null,
+      createdAt: new Date().toISOString()
+    };
+    users.push(adminUser);
+    writeUsers(users);
+    console.log(`[AUTH] Default admin account created for ${adminEmail}`);
+  } else {
+    adminUser.role = 'admin';
+    adminUser.provider = adminUser.provider || 'local';
+    const index = users.findIndex(u => u.id === adminUser.id);
+    if (index >= 0) {
+      users[index] = adminUser;
+      writeUsers(users);
+    }
+  }
+
+  return adminUser;
 }
 
 // Authentication Middleware (Supports both Supabase Cloud Auth and Local JWT)
@@ -163,7 +214,7 @@ async function optionalAuthenticateToken(req, res, next) {
           };
           return next();
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
@@ -195,7 +246,7 @@ if (fs.existsSync(REGISTRY_FILE)) {
 } else {
   try {
     fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2));
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // Setup default workspace folders
@@ -208,7 +259,7 @@ try {
   if (!fs.existsSync(defaultWSUploadsPath)) {
     fs.mkdirSync(defaultWSUploadsPath, { recursive: true });
   }
-} catch (e) {}
+} catch (e) { }
 
 // --- Legacy Migration Block ---
 const legacyDBFile = path.join(__dirname, 'db.json');
@@ -220,7 +271,7 @@ try {
     console.log('[MIGRATION] Migrating legacy db.json to workspaces/default/db.json');
     fs.renameSync(legacyDBFile, defaultDBFile);
   }
-} catch (err) {}
+} catch (err) { }
 
 try {
   if (!fs.existsSync(defaultDBFile)) {
@@ -230,7 +281,7 @@ try {
     };
     fs.writeFileSync(defaultDBFile, JSON.stringify(initialData, null, 2));
   }
-} catch (e) {}
+} catch (e) { }
 
 try {
   if (fs.existsSync(legacyUploadsDir)) {
@@ -244,7 +295,7 @@ try {
     fs.rmdirSync(legacyUploadsDir);
     console.log('[MIGRATION] Cleaned up legacy uploads folder.');
   }
-} catch (err) {}
+} catch (err) { }
 // --- End Migration Block ---
 
 // Middleware
@@ -266,7 +317,7 @@ const storage = multer.diskStorage({
     const wsId = req.params.workspaceId || 'default';
     const cleanWsId = path.basename(wsId);
     const destDir = path.join(WORKSPACES_DIR, cleanWsId, 'uploads');
-    
+
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
     }
@@ -330,14 +381,14 @@ function ensureUserWorkspace(userId, userName) {
       ownerId: userId,
       createdAt: new Date().toISOString()
     };
-    
+
     // Create folders
     const wsDir = path.join(WORKSPACES_DIR, wsId);
     const uploadsDir = path.join(wsDir, 'uploads');
     try {
       if (!fs.existsSync(wsDir)) fs.mkdirSync(wsDir, { recursive: true });
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-      
+
       const dbFile = path.join(wsDir, 'db.json');
       if (!fs.existsSync(dbFile)) {
         const initialData = {
@@ -349,7 +400,7 @@ function ensureUserWorkspace(userId, userName) {
     } catch (e) {
       console.error('Error creating user workspace directory:', e);
     }
-    
+
     registry.workspaces.push(newWs);
     saveRegistry();
     return newWs;
@@ -440,7 +491,7 @@ function verifyGoogleIdToken(token) {
 // POST /api/auth/register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'Name is required' });
@@ -456,8 +507,12 @@ app.post('/api/auth/register', async (req, res) => {
     const cleanName = name.trim();
     const users = readUsers();
 
-    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
+    if (users.some(u => u.email && u.email.toLowerCase() === cleanEmail)) {
       return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+
+    if (normalizeUserRole(role) === 'admin') {
+      return res.status(403).json({ error: 'Admin accounts are created by the site administrator only.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -469,6 +524,7 @@ app.post('/api/auth/register', async (req, res) => {
       email: cleanEmail,
       password: hashedPassword,
       provider: 'local',
+      role: 'client',
       avatar: null,
       createdAt: new Date().toISOString()
     };
@@ -476,10 +532,9 @@ app.post('/api/auth/register', async (req, res) => {
     users.push(newUser);
     writeUsers(users);
 
-    // Create user default workspace
     const userWorkspace = ensureUserWorkspace(userId, cleanName);
-
     const token = generateUserToken(newUser);
+
     res.status(201).json({
       message: 'Registration successful',
       token,
@@ -488,7 +543,8 @@ app.post('/api/auth/register', async (req, res) => {
         name: newUser.name,
         email: newUser.email,
         avatar: newUser.avatar,
-        provider: newUser.provider
+        provider: newUser.provider,
+        role: newUser.role
       },
       activeWorkspace: userWorkspace.id
     });
@@ -509,11 +565,14 @@ app.post('/api/auth/login', async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const users = readUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const user = users.find(u => u.email && u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+
+    if (!user.role) user.role = cleanEmail === (process.env.ADMIN_EMAIL || 'admin@workspace.local').toLowerCase() ? 'admin' : 'client';
+    user.role = normalizeUserRole(user.role);
 
     if (user.provider === 'google' && !user.password) {
       return res.status(400).json({ error: 'This account uses Google Sign-In. Please click "Continue with Google".' });
@@ -524,10 +583,9 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Ensure workspace exists
     const userWs = ensureUserWorkspace(user.id, user.name);
-
     const token = generateUserToken(user);
+
     res.json({
       message: 'Login successful',
       token,
@@ -536,7 +594,8 @@ app.post('/api/auth/login', async (req, res) => {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
-        provider: user.provider
+        provider: user.provider,
+        role: user.role
       },
       activeWorkspace: userWs.id
     });
@@ -639,14 +698,17 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
+  const safeUser = sanitizeUser(user);
+
   res.json({
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      provider: user.provider,
-      createdAt: user.createdAt
+      id: safeUser.id,
+      name: safeUser.name,
+      email: safeUser.email,
+      avatar: safeUser.avatar,
+      provider: safeUser.provider,
+      role: safeUser.role,
+      createdAt: safeUser.createdAt
     }
   });
 });
@@ -685,15 +747,18 @@ app.post('/api/auth/update-profile', authenticateToken, async (req, res) => {
     writeUsers(users);
     const newToken = generateUserToken(user);
 
+    const safeUser = sanitizeUser(user);
+
     res.json({
       message: 'Profile updated successfully',
       token: newToken,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        provider: user.provider
+        id: safeUser.id,
+        name: safeUser.name,
+        email: safeUser.email,
+        avatar: safeUser.avatar,
+        provider: safeUser.provider,
+        role: safeUser.role
       }
     });
   } catch (error) {
@@ -712,18 +777,18 @@ app.post('/api/auth/logout', (req, res) => {
 // API: Get registry & workspaces list (scoped to authenticated user)
 app.get('/api/workspaces', optionalAuthenticateToken, (req, res) => {
   const userId = req.user ? req.user.id : null;
-  
+
   if (userId) {
     ensureUserWorkspace(userId, req.user.name);
     // Return workspaces owned by user or shared/unowned
     const userWorkspaces = registry.workspaces.filter(ws => !ws.ownerId || ws.ownerId === userId);
-    
+
     // Choose active workspace
     let activeWs = userWorkspaces.find(ws => ws.id === registry.activeWorkspace);
     if (!activeWs && userWorkspaces.length > 0) {
       activeWs = userWorkspaces[0];
     }
-    
+
     return res.json({
       activeWorkspace: activeWs ? activeWs.id : 'default',
       workspaces: userWorkspaces
@@ -826,12 +891,12 @@ app.delete('/api/workspaces/:id', authenticateToken, (req, res) => {
 
   // Remove from registry list
   registry.workspaces.splice(index, 1);
-  
+
   // Find fallback workspace for this user
   const userWorkspaces = registry.workspaces.filter(ws => !ws.ownerId || ws.ownerId === userId);
   const nextActive = userWorkspaces.length > 0 ? userWorkspaces[0].id : 'default';
   registry.activeWorkspace = nextActive;
-  
+
   saveRegistry();
   res.json({
     activeWorkspace: nextActive,
@@ -849,8 +914,8 @@ app.post('/api/workspaces/active', optionalAuthenticateToken, (req, res) => {
   }
   registry.activeWorkspace = id;
   saveRegistry();
-  
-  const userWorkspaces = userId 
+
+  const userWorkspaces = userId
     ? registry.workspaces.filter(ws => !ws.ownerId || ws.ownerId === userId)
     : registry.workspaces;
 
@@ -871,7 +936,7 @@ app.get('/api/workspaces/:workspaceId/data', optionalAuthenticateToken, (req, re
 app.post('/api/workspaces/:workspaceId/items', optionalAuthenticateToken, (req, res) => {
   const { workspaceId } = req.params;
   const { type, title, url, content, description, category } = req.body;
-  
+
   if (!type || !title) {
     return res.status(400).json({ error: 'Type and Title are required' });
   }
@@ -879,7 +944,7 @@ app.post('/api/workspaces/:workspaceId/items', optionalAuthenticateToken, (req, 
   const db = readWorkspaceDB(workspaceId);
   const newItem = {
     id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    type, 
+    type,
     title,
     category: category || 'General',
     createdAt: new Date().toISOString()
@@ -1174,8 +1239,15 @@ app.get('*', (req, res, next) => {
 
 // Start Server (when run standalone)
 if (require.main === module || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Workspace server is running at http://localhost:${PORT}`);
+  ensureDefaultAdminUser().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Workspace server is running at http://localhost:${PORT}`);
+    });
+  }).catch((err) => {
+    console.error('[AUTH] Failed to initialize admin account:', err);
+    app.listen(PORT, () => {
+      console.log(`Workspace server is running at http://localhost:${PORT}`);
+    });
   });
 }
 

@@ -13,11 +13,11 @@ let activeWorkspaceId = 'default';
 // Global Fetch Interceptor for Authentication
 // ================================================================
 const _nativeFetch = window.fetch;
-window.fetch = async function(resource, init = {}) {
+window.fetch = async function (resource, init = {}) {
   const url = typeof resource === 'string' ? resource : resource.url;
   const initCopy = { ...init };
   const headers = new Headers(initCopy.headers || {});
-  
+
   const token = localStorage.getItem('workspace_hub_auth_token');
   if (token && !headers.has('Authorization') && (typeof url === 'string' && url.startsWith('/api/'))) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -115,7 +115,7 @@ function onReady(fn) {
 // ================================================================
 // Authentication & User Session Module
 // ================================================================
-const Auth = (function() {
+const Auth = (function () {
   const TOKEN_KEY = 'workspace_hub_auth_token';
   let currentUser = null;
   let authToken = localStorage.getItem(TOKEN_KEY) || null;
@@ -186,7 +186,7 @@ const Auth = (function() {
       if (userDisplayName) userDisplayName.textContent = user.name || 'User';
       if (dropdownUserName) dropdownUserName.textContent = user.name || 'User';
       if (dropdownUserEmail) dropdownUserEmail.textContent = user.email || '';
-      
+
       updateAvatarElement(userAvatarDisplay, user);
       updateAvatarElement(userDropdownAvatar, user);
       updateAvatarElement(profilePreviewAvatar, user);
@@ -194,7 +194,12 @@ const Auth = (function() {
       if (profileInfoName) profileInfoName.textContent = user.name || 'User';
       if (profileInfoEmail) profileInfoEmail.textContent = user.email || '';
       if (profileInfoProvider) {
-        profileInfoProvider.textContent = user.provider === 'google' ? 'Google Account' : 'Email Account';
+        const providerLabel = user.role === 'admin'
+          ? 'Admin Account'
+          : user.provider === 'google'
+            ? 'Google Account'
+            : 'Email Account';
+        profileInfoProvider.textContent = providerLabel;
       }
       if (settingsName) settingsName.value = user.name || '';
       if (passwordChangeSection) {
@@ -219,7 +224,7 @@ const Auth = (function() {
       welcomePage.style.display = 'flex';
       welcomePage.style.opacity = '1';
       document.body.classList.add('on-welcome-page');
-      
+
       const user = currentUser;
       if (user || isReturningUser) {
         if (welcomeUserBanner) {
@@ -351,12 +356,41 @@ const Auth = (function() {
     hideAuthAlert();
     try {
       const cleanEmail = (email || '').trim().toLowerCase();
+
       // If demo credentials, use demo login directly
       if (cleanEmail === 'demo@workspace.local') {
         return await handleDemoLogin();
       }
 
-      // 1. If Supabase is configured, try Supabase Cloud Auth first
+      let localLoginError = null;
+
+      // 1. Prefer local account first so a local user is not blocked by a Supabase
+      // project mismatch, email-confirmation requirement, or stale cloud config.
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          setSession(data.token, data.user);
+          closeAuthModal();
+          if (typeof showToast === 'function') {
+            showToast(`Welcome back, ${data.user.name}!`, 'shield-check');
+          }
+          await initWorkspaceHub();
+          return true;
+        }
+
+        localLoginError = data.error || 'Failed to sign in. Please check your credentials.';
+      } catch (localErr) {
+        console.warn('[AUTH] Local login failed, will try Supabase if configured:', localErr.message);
+        localLoginError = localErr.message || 'Failed to sign in. Please check your credentials.';
+      }
+
+      // 2. If Supabase is configured and local login did not succeed, try cloud auth.
       if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
         try {
           const { user, session } = await window.SupabaseManager.signIn(cleanEmail, password);
@@ -365,7 +399,8 @@ const Auth = (function() {
             email: user.email,
             name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0] || 'User',
             avatar: user.user_metadata?.avatar_url || null,
-            provider: 'supabase'
+            provider: 'supabase',
+            role: 'client'
           };
           setSession(session.access_token, userData);
           closeAuthModal();
@@ -375,29 +410,22 @@ const Auth = (function() {
           await initWorkspaceHub();
           return true;
         } catch (sbErr) {
-          console.warn('[AUTH] Supabase sign in failed, trying local fallback:', sbErr.message);
-          // If Supabase failed, fall through to local fallback
+          console.warn('[AUTH] Supabase sign in failed:', sbErr.message);
+
+          // If the local account exists but credentials are wrong, keep the local error.
+          // If there is no local account, surface the Supabase error so the user is told why.
+          if (localLoginError && localLoginError.toLowerCase().includes('invalid email or password')) {
+            showAuthAlert(localLoginError);
+            return false;
+          }
+
+          showAuthAlert(sbErr.message || 'Failed to sign in. Please check your credentials.');
+          return false;
         }
       }
 
-      // 2. Local Fallback Auth
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showAuthAlert(data.error || 'Failed to sign in. Please check your credentials.');
-        return false;
-      }
-      setSession(data.token, data.user);
-      closeAuthModal();
-      if (typeof showToast === 'function') {
-        showToast(`Welcome back, ${data.user.name}!`, 'shield-check');
-      }
-      await initWorkspaceHub();
-      return true;
+      showAuthAlert(localLoginError || 'Failed to sign in. Please check your credentials.');
+      return false;
     } catch (err) {
       console.error('Login error:', err);
       showAuthAlert(err.message || 'Failed to sign in. Please check your credentials.');
@@ -422,7 +450,8 @@ const Auth = (function() {
             email: user.email,
             name: name.trim(),
             avatar: null,
-            provider: 'supabase'
+            provider: 'supabase',
+            role: 'client'
           };
           const token = session ? session.access_token : `sb_user_${user.id}`;
           setSession(token, userData);
@@ -504,6 +533,9 @@ const Auth = (function() {
     } else {
       localStorage.removeItem(TOKEN_KEY);
     }
+    if (user && !user.role) {
+      user.role = 'client';
+    }
     updateUIForUser(user);
   }
 
@@ -511,7 +543,7 @@ const Auth = (function() {
     if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
       try {
         await window.SupabaseManager.signOut();
-      } catch (e) {}
+      } catch (e) { }
     }
     authToken = null;
     currentUser = null;
@@ -531,7 +563,8 @@ const Auth = (function() {
             email: u.email,
             name: u.user_metadata?.name || u.user_metadata?.full_name || u.email.split('@')[0] || 'User',
             avatar: u.user_metadata?.avatar_url || null,
-            provider: 'supabase'
+            provider: 'supabase',
+            role: 'client'
           };
           setSession(session.access_token, user);
           return user;
@@ -823,7 +856,7 @@ const Auth = (function() {
         if (userDropdownMenu) userDropdownMenu.style.display = 'none';
         try {
           await fetch('/api/auth/logout', { method: 'POST' });
-        } catch (e) {}
+        } catch (e) { }
         await clearSession();
         if (typeof showToast === 'function') {
           showToast('Signed out successfully', 'log-out');
@@ -993,11 +1026,11 @@ async function fetchWorkspaces() {
     // 2. Local Fallback Workspaces
     const response = await fetch('/api/workspaces');
     if (!response.ok) throw new Error('Failed to load workspaces');
-    
+
     const data = await response.json();
     workspaces = data.workspaces || [];
     activeWorkspaceId = data.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
-    
+
     window.workspaces = workspaces;
     window.activeWorkspaceId = activeWorkspaceId;
     renderWorkspacesDropdown();
@@ -1009,7 +1042,7 @@ async function fetchWorkspaces() {
 // Populates and sets active workspace selector
 function renderWorkspacesDropdown() {
   workspaceSelect.innerHTML = '';
-  
+
   workspaces.forEach(ws => {
     const option = document.createElement('option');
     option.value = ws.id;
@@ -1019,7 +1052,7 @@ function renderWorkspacesDropdown() {
     }
     workspaceSelect.appendChild(option);
   });
-  
+
   // Show delete button only if it's not the default workspace
   if (activeWorkspaceId === 'default') {
     btnDeleteWorkspace.style.display = 'none';
@@ -1061,18 +1094,18 @@ async function fetchWorkspaceData() {
       fetch(`/api/workspaces/${activeWorkspaceId}/folders`).catch(() => null)
     ]);
     if (!dataRes.ok) throw new Error('Failed to fetch workspace items');
-    
+
     dbData = await dataRes.json();
     window.dbData = dbData;
     window.activeWorkspaceId = activeWorkspaceId;
-    
+
     if (foldersRes && foldersRes.ok) {
       const folderTree = await foldersRes.json();
       workspaceFolders = folderTree.folders || [];
     } else {
       workspaceFolders = [];
     }
-    
+
     populateCategoriesDropdowns();
     resetFilters();
     updateUI();
@@ -1087,7 +1120,7 @@ function resetFilters() {
   filterStatusBar.style.display = 'none';
   searchQuery = '';
   searchInput.value = '';
-  
+
   // Reset type filter to all
   activeTypeFilter = 'all';
   [filterAll, filterLinks, filterFiles, filterNotes].forEach(el => el.classList.remove('active'));
@@ -1120,26 +1153,26 @@ function populateCategoriesDropdowns() {
 // Render dynamic category list in Sidebar
 function renderSidebarCategories() {
   categoriesList.innerHTML = '';
-  
+
   dbData.categories.forEach(cat => {
     // Count items in this category
     const count = dbData.items.filter(item => item.category === cat).length;
-    
+
     const li = document.createElement('li');
     if (activeCategoryFilter === cat) {
       li.className = 'active';
     }
-    
+
     li.innerHTML = `
       <i data-lucide="folder"></i>
       <span>${escapeHTML(cat)}</span>
       <span class="badge">${count}</span>
     `;
-    
+
     li.addEventListener('click', () => {
       selectCategoryFilter(cat);
     });
-    
+
     categoriesList.appendChild(li);
   });
 }
@@ -1147,7 +1180,7 @@ function renderSidebarCategories() {
 // Render workspace cards
 function renderGridItems() {
   itemsGrid.innerHTML = '';
-  
+
   // Filter items
   let filteredItems = dbData.items;
 
@@ -1168,7 +1201,7 @@ function renderGridItems() {
       const titleMatch = item.title && item.title.toLowerCase().includes(q);
       const descMatch = item.description && item.description.toLowerCase().includes(q);
       const categoryMatch = item.category && item.category.toLowerCase().includes(q);
-      
+
       let typeSpecificMatch = false;
       if (item.type === 'link') {
         typeSpecificMatch = item.url && item.url.toLowerCase().includes(q);
@@ -1177,7 +1210,7 @@ function renderGridItems() {
       } else if (item.type === 'file') {
         typeSpecificMatch = item.fileName && item.fileName.toLowerCase().includes(q);
       }
-      
+
       return titleMatch || descMatch || categoryMatch || typeSpecificMatch;
     });
   }
@@ -1202,7 +1235,7 @@ function renderGridItems() {
   } else {
     itemsGrid.style.display = 'grid';
     emptyState.style.display = 'none';
-    
+
     // Render Root Folder cards
     filteredFolders.forEach(folder => {
       const folderCard = createFolderCardElement(folder);
@@ -1336,7 +1369,7 @@ async function deleteItem(itemId) {
       const response = await fetch(`/api/workspaces/${activeWorkspaceId}/items/${itemId}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
     }
-    
+
     // Update local copy and render
     dbData.items = dbData.items.filter(item => item.id !== itemId);
     updateUI();
@@ -1393,12 +1426,12 @@ function openContextMenu(e, target, type) {
   activeContextTarget = target;
   activeContextType = type;
 
-  const targetTitle = type === 'folder' 
-    ? target.name 
+  const targetTitle = type === 'folder'
+    ? target.name
     : (target.title || target.fileName || 'Item');
 
   ctxTitle.textContent = targetTitle;
-  
+
   if (type === 'folder') {
     ctxIcon.setAttribute('data-lucide', 'folder');
     ctxOptDownload.style.display = 'none';
@@ -1776,9 +1809,9 @@ function capitalize(str) {
 function formatDateFull(isoString) {
   if (!isoString) return 'Unknown';
   const d = new Date(isoString);
-  return d.toLocaleString(undefined, { 
-    year: 'numeric', 
-    month: 'short', 
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
@@ -1789,7 +1822,7 @@ function formatDateFull(isoString) {
 function updateStats() {
   const items = dbData.items;
   const foldersCount = workspaceFolders ? workspaceFolders.length : 0;
-  
+
   const totalCount = items.length + foldersCount;
   const linkCount = items.filter(item => item.type === 'link').length;
   const fileCount = items.filter(item => item.type === 'file').length;
@@ -1830,7 +1863,7 @@ function selectTypeFilter(element, typeName) {
   // Reset active classes
   [filterAll, filterLinks, filterFiles, filterNotes].forEach(el => el.classList.remove('active'));
   element.classList.add('active');
-  
+
   activeTypeFilter = typeName;
   renderGridItems();
   lucide.createIcons();
@@ -1851,7 +1884,7 @@ function setupEventListeners() {
   setupContextMenuEvents();
 
   // WORKSPACE EVENT LISTENERS
-  
+
   // Workspace select switch
   workspaceSelect.addEventListener('change', async (e) => {
     const wsId = e.target.value;
@@ -1862,14 +1895,14 @@ function setupEventListeners() {
         body: JSON.stringify({ id: wsId })
       });
       if (!response.ok) throw new Error('Failed to set active workspace');
-      
+
       activeWorkspaceId = wsId;
       if (activeWorkspaceId === 'default') {
         btnDeleteWorkspace.style.display = 'none';
       } else {
         btnDeleteWorkspace.style.display = 'inline-flex';
       }
-      
+
       await fetchWorkspaceData();
     } catch (err) {
       console.error(err);
@@ -1896,7 +1929,7 @@ function setupEventListeners() {
   formAddWorkspace.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('workspace-name').value;
-    
+
     try {
       if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
         await window.SupabaseManager.createWorkspace(name);
@@ -1906,7 +1939,7 @@ function setupEventListeners() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to create workspace');
@@ -1915,7 +1948,7 @@ function setupEventListeners() {
 
       modalAddWorkspace.classList.remove('active');
       formAddWorkspace.reset();
-      
+
       // Update state and load registry
       await fetchWorkspaces();
       await fetchWorkspaceData();
@@ -1945,7 +1978,7 @@ function setupEventListeners() {
         });
         if (!response.ok) throw new Error('Failed to delete workspace');
       }
-      
+
       await fetchWorkspaces();
       await fetchWorkspaceData();
     } catch (error) {
@@ -1979,12 +2012,12 @@ function setupEventListeners() {
     modalAddItem.classList.add('active');
     resetFileDropzone();
   });
-  
+
   btnEmptyAdd.addEventListener('click', () => {
     modalAddItem.classList.add('active');
     resetFileDropzone();
   });
-  
+
   btnCloseModal.addEventListener('click', () => {
     modalAddItem.classList.remove('active');
   });
@@ -2003,7 +2036,7 @@ function setupEventListeners() {
     modalAddCategory.classList.add('active');
     document.getElementById('category-name').value = '';
   });
-  
+
   btnCloseCatModal.addEventListener('click', () => {
     modalAddCategory.classList.remove('active');
   });
@@ -2013,7 +2046,7 @@ function setupEventListeners() {
     tab.addEventListener('click', () => {
       modalTabs.forEach(t => t.classList.remove('active'));
       modalForms.forEach(form => form.classList.remove('active'));
-      
+
       tab.classList.add('active');
       const targetTabId = tab.dataset.tab;
       document.getElementById(targetTabId).classList.add('active');
@@ -2088,7 +2121,7 @@ function setupEventListeners() {
         const newItem = await response.json();
         dbData.items.push(newItem);
       }
-      
+
       modalAddItem.classList.remove('active');
       formAddLink.reset();
       updateUI();
@@ -2126,7 +2159,7 @@ function setupEventListeners() {
         const newItem = await response.json();
         dbData.items.push(newItem);
       }
-      
+
       modalAddItem.classList.remove('active');
       formAddNote.reset();
       updateUI();
@@ -2163,7 +2196,7 @@ function setupEventListeners() {
         const data = await response.json();
         dbData.categories = data.categories;
       }
-      
+
       modalAddCategory.classList.remove('active');
       populateCategoriesDropdowns();
       updateUI();
@@ -2304,58 +2337,58 @@ const FolderExplorer = (() => {
 
   // DOM refs (resolved lazily after DOM ready)
   const dom = () => ({
-    explorer:          document.getElementById('folder-explorer'),
-    folderTree:        document.getElementById('folder-tree'),
-    breadcrumb:        document.getElementById('folder-breadcrumb'),
-    btnRoot:           document.getElementById('btn-breadcrumb-root'),
-    btnNewFolder:      document.getElementById('btn-fe-new-folder'),
-    btnUpload:         document.getElementById('btn-fe-upload'),
+    explorer: document.getElementById('folder-explorer'),
+    folderTree: document.getElementById('folder-tree'),
+    breadcrumb: document.getElementById('folder-breadcrumb'),
+    btnRoot: document.getElementById('btn-breadcrumb-root'),
+    btnNewFolder: document.getElementById('btn-fe-new-folder'),
+    btnUpload: document.getElementById('btn-fe-upload'),
 
     // Contents
-    fileList:          document.getElementById('folder-file-list'),
-    subfolderGrid:     document.getElementById('folder-subfolder-grid'),
-    contentsEmpty:     document.getElementById('folder-contents-empty'),
-    btnUploadEmpty:    document.getElementById('btn-fe-upload-empty'),
+    fileList: document.getElementById('folder-file-list'),
+    subfolderGrid: document.getElementById('folder-subfolder-grid'),
+    contentsEmpty: document.getElementById('folder-contents-empty'),
+    btnUploadEmpty: document.getElementById('btn-fe-upload-empty'),
 
     // Create Folder modal
     modalCreateFolder: document.getElementById('modal-create-folder'),
     btnCloseFolderModal: document.getElementById('btn-close-folder-modal'),
-    formCreateFolder:  document.getElementById('form-create-folder'),
-    folderNameInput:   document.getElementById('folder-name-input'),
+    formCreateFolder: document.getElementById('form-create-folder'),
+    folderNameInput: document.getElementById('folder-name-input'),
 
     // Upload modal
     modalFolderUpload: document.getElementById('modal-folder-upload'),
     btnCloseFolderUploadModal: document.getElementById('btn-close-folder-upload-modal'),
-    formFolderUpload:  document.getElementById('form-folder-upload'),
-    feFileDropzone:    document.getElementById('fe-file-dropzone'),
-    feFileInput:       document.getElementById('fe-file-input'),
-    feSelectedInfo:    document.getElementById('fe-selected-info'),
-    feFileNameLabel:   document.getElementById('fe-file-name-label'),
-    btnFeRemoveFile:   document.getElementById('btn-fe-remove-file'),
-    feUploadProgress:  document.getElementById('fe-upload-progress'),
-    feProgressFill:    document.getElementById('fe-progress-fill'),
-    feProgressText:    document.getElementById('fe-progress-text'),
+    formFolderUpload: document.getElementById('form-folder-upload'),
+    feFileDropzone: document.getElementById('fe-file-dropzone'),
+    feFileInput: document.getElementById('fe-file-input'),
+    feSelectedInfo: document.getElementById('fe-selected-info'),
+    feFileNameLabel: document.getElementById('fe-file-name-label'),
+    btnFeRemoveFile: document.getElementById('btn-fe-remove-file'),
+    feUploadProgress: document.getElementById('fe-upload-progress'),
+    feProgressFill: document.getElementById('fe-progress-fill'),
+    feProgressText: document.getElementById('fe-progress-text'),
     btnFeSubmitUpload: document.getElementById('btn-fe-submit-upload'),
-    feTargetLabel:     document.getElementById('fe-target-folder-label'),
+    feTargetLabel: document.getElementById('fe-target-folder-label'),
 
     // Rename modal
-    modalRename:       document.getElementById('modal-fe-rename'),
-    btnCloseRename:    document.getElementById('btn-close-rename-modal'),
-    formRename:        document.getElementById('form-fe-rename'),
-    renameInput:       document.getElementById('fe-rename-input'),
-    renameModalTitle:  document.getElementById('fe-rename-modal-title'),
+    modalRename: document.getElementById('modal-fe-rename'),
+    btnCloseRename: document.getElementById('btn-close-rename-modal'),
+    formRename: document.getElementById('form-fe-rename'),
+    renameInput: document.getElementById('fe-rename-input'),
+    renameModalTitle: document.getElementById('fe-rename-modal-title'),
 
     // Move modal
-    modalMove:         document.getElementById('modal-fe-move'),
-    btnCloseMove:      document.getElementById('btn-close-move-modal'),
-    btnCancelMove:     document.getElementById('btn-cancel-move'),
-    formMove:          document.getElementById('form-fe-move'),
-    moveFileName:      document.getElementById('fe-move-file-name'),
-    moveDestSelect:    document.getElementById('fe-move-destination-select'),
-    btnSubmitMove:     document.getElementById('btn-submit-move'),
+    modalMove: document.getElementById('modal-fe-move'),
+    btnCloseMove: document.getElementById('btn-close-move-modal'),
+    btnCancelMove: document.getElementById('btn-cancel-move'),
+    formMove: document.getElementById('form-fe-move'),
+    moveFileName: document.getElementById('fe-move-file-name'),
+    moveDestSelect: document.getElementById('fe-move-destination-select'),
+    btnSubmitMove: document.getElementById('btn-submit-move'),
 
     // Sidebar folder count badge
-    countFolders:      document.getElementById('count-folders'),
+    countFolders: document.getElementById('count-folders'),
   });
 
   // ---------- Public: activate / deactivate ----------
@@ -2730,7 +2763,7 @@ const FolderExplorer = (() => {
     const dateStr = file.modifiedAt ? formatDate(file.modifiedAt) : '';
     const fileUrl = `/uploads/${activeWorkspaceId}/${file.path}`;
     const ext = file.name.split('.').pop().toLowerCase();
-    const iconName = ['pdf'].includes(ext) ? 'file-text' : ['jpg','jpeg','png','gif','webp'].includes(ext) ? 'image' : 'file';
+    const iconName = ['pdf'].includes(ext) ? 'file-text' : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) ? 'image' : 'file';
 
     row.draggable = true;
     row.addEventListener('dragstart', (e) => {
@@ -3042,7 +3075,7 @@ const FolderExplorer = (() => {
       };
       xhr.onerror = () => { alert('Network error during upload.'); reject(); };
       xhr.send(formData);
-    }).catch(() => {});
+    }).catch(() => { });
 
     setTimeout(async () => {
       d.modalFolderUpload.classList.remove('active');
