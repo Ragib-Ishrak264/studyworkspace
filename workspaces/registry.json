@@ -38,6 +38,18 @@
       "name": "Ragib Ishrak Workspace",
       "ownerId": "usr_1790849231500_zwezxg",
       "createdAt": "2026-10-01T10:07:11.503Z"
+    },
+    {
+      "id": "ws_admin_1790854874971_lf9l1k",
+      "name": "Site Admin Workspace",
+      "ownerId": "admin_1790854874971_lf9l1k",
+      "createdAt": "2026-10-01T11:44:06.988Z"
+    },
+    {
+      "id": "ws_usr_1790855057648_s7wtk2",
+      "name": "Client User Workspace",
+      "ownerId": "usr_1790855057648_s7wtk2",
+      "createdAt": "2026-10-01T11:44:17.649Z"
     }
   ]
 }
