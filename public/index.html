@@ -28,7 +28,347 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
+  <!-- ========================================================== -->
+  <!-- Welcoming Landing Page (Hero, Showcase, Features & Auth)   -->
+  <!-- ========================================================== -->
+  <div class="welcome-page" id="welcome-page" style="display: none;">
+    <!-- Ambient Background Aurora Orbs -->
+    <div class="welcome-aurora aura-1"></div>
+    <div class="welcome-aurora aura-2"></div>
+    <div class="welcome-aurora aura-3"></div>
+
+    <!-- Active User Back-to-Workspace Bar (visible only when logged in) -->
+    <div class="welcome-user-banner" id="welcome-user-banner" style="display: none;">
+      <div class="welcome-user-banner-inner">
+        <span>You are currently signed in as <strong id="welcome-banner-username">User</strong></span>
+        <button type="button" class="btn-banner-return" id="btn-banner-return">
+          <span>Go to Workspace</span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="welcome-navbar">
+      <div class="welcome-nav-container">
+        <div class="welcome-brand">
+          <div class="welcome-brand-icon">
+            <i data-lucide="layout-dashboard"></i>
+          </div>
+          <span class="welcome-brand-name">Workspace Hub</span>
+          <span class="welcome-brand-badge">v2.5 Cloud</span>
+        </div>
+
+        <nav class="welcome-nav-links">
+          <a href="#features-section" class="welcome-nav-link">Features</a>
+          <a href="#showcase-section" class="welcome-nav-link">Showcase</a>
+          <a href="#sync-section" class="welcome-nav-link">Cloud Sync</a>
+        </nav>
+
+        <div class="welcome-nav-actions">
+          <button type="button" class="btn-welcome-ghost" id="btn-welcome-demo-nav" title="Instant Demo with pre-loaded items" onclick="window.Auth && window.Auth.handleDemoLogin()">
+            <i data-lucide="sparkles"></i>
+            <span>Live Demo</span>
+          </button>
+          <button type="button" class="btn-welcome-outline" id="btn-welcome-login-nav" onclick="window.Auth && window.Auth.openAuthModal('login', { allowClose: true })">
+            <i data-lucide="log-in"></i>
+            <span>Sign In</span>
+          </button>
+          <button type="button" class="btn-welcome-primary" id="btn-welcome-register-nav" onclick="window.Auth && window.Auth.openAuthModal('register', { allowClose: true })">
+            <span>Get Started Free</span>
+            <i data-lucide="arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Welcoming Body -->
+    <main class="welcome-main">
+      <!-- Hero Section -->
+      <section class="welcome-hero-section">
+        <div class="welcome-pill-badge">
+          <span class="pill-sparkle">✨</span>
+          <span>Next-Generation Personal Cloud Workspace</span>
+          <i data-lucide="chevron-right" class="pill-chevron"></i>
+        </div>
+
+        <h1 class="welcome-hero-title">
+          Organize Your Digital Life in One <span class="gradient-text">Blazing-Fast Hub</span>
+        </h1>
+
+        <p class="welcome-hero-description">
+          Capture smart web bookmarks with instant previews, manage documents and PDFs, write distraction-free markdown notes, and sync across all your devices in real-time.
+        </p>
+
+        <div class="welcome-hero-cta-group">
+          <button type="button" class="btn-hero-primary" id="btn-hero-register">
+            <i data-lucide="user-plus"></i>
+            <span>Get Started Free</span>
+          </button>
+          <button type="button" class="btn-hero-secondary" id="btn-hero-login">
+            <i data-lucide="log-in"></i>
+            <span>Sign In to Hub</span>
+          </button>
+          <button type="button" class="btn-hero-demo" id="btn-hero-demo">
+            <i data-lucide="play-circle"></i>
+            <span>Explore Live Demo</span>
+          </button>
+        </div>
+
+        <div class="welcome-trust-strip">
+          <div class="trust-badge">
+            <i data-lucide="zap"></i>
+            <span>Sub-second Search</span>
+          </div>
+          <span class="trust-dot">•</span>
+          <div class="trust-badge">
+            <i data-lucide="shield-check"></i>
+            <span>Private & Encrypted</span>
+          </div>
+          <span class="trust-dot">•</span>
+          <div class="trust-badge">
+            <i data-lucide="cloud"></i>
+            <span>Supabase Cloud Sync</span>
+          </div>
+          <span class="trust-dot">•</span>
+          <div class="trust-badge">
+            <i data-lucide="smartphone"></i>
+            <span>PWA & Mobile Ready</span>
+          </div>
+        </div>
+
+        <!-- Interactive Preview Showcase -->
+        <div class="welcome-showcase-container" id="showcase-section">
+          <div class="showcase-card-ambient-glow"></div>
+          <div class="showcase-window-frame">
+            <div class="showcase-titlebar">
+              <div class="showcase-window-dots">
+                <span class="dot-red"></span>
+                <span class="dot-yellow"></span>
+                <span class="dot-green"></span>
+              </div>
+              <div class="showcase-mock-search">
+                <i data-lucide="search"></i>
+                <span>Search links, files, notes, folders...</span>
+                <kbd>Ctrl K</kbd>
+              </div>
+              <div class="showcase-status-indicator">
+                <span class="indicator-pulse"></span>
+                <span>Cloud Synced</span>
+              </div>
+            </div>
+
+            <div class="showcase-workspace-preview">
+              <!-- Sidebar Preview Snippet -->
+              <div class="showcase-sidebar-mock">
+                <div class="mock-nav-item active">
+                  <i data-lucide="grid"></i>
+                  <span>All Items</span>
+                  <span class="mock-count">24</span>
+                </div>
+                <div class="mock-nav-item">
+                  <i data-lucide="link-2"></i>
+                  <span>Links</span>
+                  <span class="mock-count">12</span>
+                </div>
+                <div class="mock-nav-item">
+                  <i data-lucide="file-text"></i>
+                  <span>PDFs & Files</span>
+                  <span class="mock-count">8</span>
+                </div>
+                <div class="mock-nav-item">
+                  <i data-lucide="sticky-note"></i>
+                  <span>Notes</span>
+                  <span class="mock-count">4</span>
+                </div>
+              </div>
+
+              <!-- Main Grid Preview Cards -->
+              <div class="showcase-grid-mock">
+                <!-- Preview Item 1: Link -->
+                <div class="showcase-item-card">
+                  <div class="showcase-item-header">
+                    <span class="item-tag tag-link"><i data-lucide="link-2"></i> Link</span>
+                    <span class="item-category">Dev Tools</span>
+                  </div>
+                  <h4 class="showcase-item-title">GitHub: Developer Platform</h4>
+                  <p class="showcase-item-desc">Where the world builds software. Millions of developers and teams collaborate here.</p>
+                  <div class="showcase-item-footer">
+                    <span class="item-meta">github.com</span>
+                    <span class="item-badge-status">Synced</span>
+                  </div>
+                </div>
+
+                <!-- Preview Item 2: PDF Document -->
+                <div class="showcase-item-card">
+                  <div class="showcase-item-header">
+                    <span class="item-tag tag-file"><i data-lucide="file-text"></i> PDF Doc</span>
+                    <span class="item-category">Architecture</span>
+                  </div>
+                  <h4 class="showcase-item-title">Cloud-System-Design-2026.pdf</h4>
+                  <p class="showcase-item-desc">Complete overview of distributed state, encryption layers, and multi-region sync pipelines.</p>
+                  <div class="showcase-item-footer">
+                    <span class="item-meta">3.8 MB • PDF</span>
+                    <span class="item-badge-status">Verified</span>
+                  </div>
+                </div>
+
+                <!-- Preview Item 3: Markdown Note -->
+                <div class="showcase-item-card">
+                  <div class="showcase-item-header">
+                    <span class="item-tag tag-note"><i data-lucide="sticky-note"></i> Markdown</span>
+                    <span class="item-category">Sprint</span>
+                  </div>
+                  <h4 class="showcase-item-title">Quarterly Goals & Milestones</h4>
+                  <p class="showcase-item-desc">✓ Cloud database integration<br>✓ Glassmorphic UI redesign<br>✓ Offline caching support</p>
+                  <div class="showcase-item-footer">
+                    <span class="item-meta">Updated today</span>
+                    <span class="item-badge-status">Encrypted</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Floating Accent Feature Badges -->
+          <div class="floating-pill-badge badge-top-right">
+            <i data-lucide="sparkles"></i>
+            <span>AI Favicon & Meta Extractor</span>
+          </div>
+          <div class="floating-pill-badge badge-bottom-left">
+            <i data-lucide="refresh-cw"></i>
+            <span>Real-time Multi-Device Sync</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bento Features Section -->
+      <section class="welcome-features-section" id="features-section">
+        <div class="features-badge-container">
+          <span class="section-badge">Capabilities</span>
+        </div>
+        <h2 class="features-heading">Everything You Need for a Seamless Digital Sanctuary</h2>
+        <p class="features-subheading">Crafted with high performance, elegant glassmorphism, and thoughtful productivity workflows.</p>
+
+        <div class="features-bento-grid">
+          <!-- Bento Card 1 -->
+          <div class="bento-box bento-large">
+            <div class="bento-box-inner">
+              <div class="bento-icon-box bento-icon-indigo">
+                <i data-lucide="bookmark"></i>
+              </div>
+              <h3 class="bento-title">Smart Link Bookmarking</h3>
+              <p class="bento-description">
+                Paste any web address and Workspace Hub immediately scrapes title, description, and high-resolution favicons. Keep articles, repositories, and SaaS tools neatly catalogued with instant search.
+              </p>
+              <div class="bento-tags-row">
+                <span class="bento-pill">Rich OpenGraph Previews</span>
+                <span class="bento-pill">Category Grouping</span>
+                <span class="bento-pill">Fast Filtering</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bento Card 2 -->
+          <div class="bento-box">
+            <div class="bento-box-inner">
+              <div class="bento-icon-box bento-icon-rose">
+                <i data-lucide="folder-kanban"></i>
+              </div>
+              <h3 class="bento-title">File & Document Vault</h3>
+              <p class="bento-description">
+                Upload PDFs, research papers, and documents with seamless drag-and-drop. Organize files in nested folders with instant in-browser viewing.
+              </p>
+              <div class="bento-tags-row">
+                <span class="bento-pill">Built-in PDF Viewer</span>
+                <span class="bento-pill">Folder Hierarchy</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bento Card 3 -->
+          <div class="bento-box">
+            <div class="bento-box-inner">
+              <div class="bento-icon-box bento-icon-emerald">
+                <i data-lucide="file-edit"></i>
+              </div>
+              <h3 class="bento-title">Distraction-Free Markdown</h3>
+              <p class="bento-description">
+                Jot down ideas, meeting notes, code snippets, or todo lists with full markdown formatting and one-click clipboard copying.
+              </p>
+              <div class="bento-tags-row">
+                <span class="bento-pill">Syntax Highlighting</span>
+                <span class="bento-pill">Instant Copy</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bento Card 4 -->
+          <div class="bento-box bento-large" id="sync-section">
+            <div class="bento-box-inner">
+              <div class="bento-icon-box bento-icon-cyan">
+                <i data-lucide="cloud-lightning"></i>
+              </div>
+              <h3 class="bento-title">Supabase Real-time Cloud Synchronization</h3>
+              <p class="bento-description">
+                Connect your Supabase project to synchronize bookmarks, notes, and uploaded files across your laptop, desktop, tablet, and smartphone. Supports Google OAuth, email authentication, and encrypted data storage.
+              </p>
+              <div class="bento-tags-row">
+                <span class="bento-pill">Multi-Device Access</span>
+                <span class="bento-pill">Google Sign-In</span>
+                <span class="bento-pill">Row-Level Security</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bottom Call To Action Banner -->
+      <section class="welcome-cta-banner">
+        <div class="cta-banner-ambient"></div>
+        <div class="cta-banner-card">
+          <div class="cta-sparkle-icon">
+            <i data-lucide="sparkles"></i>
+          </div>
+          <h2 class="cta-banner-title">Ready to Elevate Your Productivity?</h2>
+          <p class="cta-banner-desc">
+            Experience a clean, unified workspace tailored for focused minds. Start free or jump straight into the live interactive demo.
+          </p>
+          <div class="cta-banner-buttons">
+            <button type="button" class="btn-banner-primary" id="btn-banner-register">
+              <span>Create Free Account</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+            <button type="button" class="btn-banner-demo" id="btn-banner-demo">
+              <i data-lucide="play"></i>
+              <span>Launch Demo Mode</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Welcoming Page Footer -->
+      <footer class="welcome-footer">
+        <div class="welcome-footer-inner">
+          <div class="footer-brand-col">
+            <div class="footer-brand-logo">
+              <i data-lucide="layout-dashboard"></i>
+              <span>Workspace Hub</span>
+            </div>
+            <p class="footer-tagline">
+              Your personal cloud-synced digital sanctuary for links, files, and thoughts.
+            </p>
+          </div>
+          <div class="footer-links-col">
+            <span>Built for speed, privacy & productivity.</span>
+            <span>© 2026 Workspace Hub • All rights reserved.</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <div class="app-container" id="app-container">
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
     
     <!-- Sidebar Navigation -->
@@ -189,6 +529,10 @@
                 <button class="user-dropdown-item" id="btn-dropdown-workspace">
                   <i data-lucide="folder-kanban"></i>
                   <span>New Workspace</span>
+                </button>
+                <button class="user-dropdown-item" id="btn-dropdown-welcome">
+                  <i data-lucide="sparkles"></i>
+                  <span>Welcome & Tour</span>
                 </button>
                 <div class="user-dropdown-divider"></div>
                 <button class="user-dropdown-item danger" id="btn-dropdown-logout">
@@ -667,18 +1011,19 @@
   <!-- ========================================================== -->
   <div class="modal-backdrop" id="modal-auth">
     <div class="modal-card modal-card-auth">
+      <div class="auth-card-aura"></div>
       <div class="modal-header auth-modal-header">
         <div class="auth-header-brand">
           <div class="auth-brand-icon">
             <i data-lucide="layout-dashboard"></i>
           </div>
           <div>
-            <h2 id="auth-modal-title">Welcome to Workspace Hub</h2>
+            <h2 id="auth-modal-title">Welcome Back</h2>
             <p class="auth-modal-subtitle">Sign in to access your cloud-synced workspace from any device</p>
           </div>
         </div>
-        <!-- Close button only shown when user is already logged in (via JS) -->
-        <button class="modal-close" id="btn-close-auth-modal" aria-label="Close" style="display:none;">
+        <!-- Close button only shown when user can close or is on welcome page -->
+        <button class="modal-close" id="btn-close-auth-modal" aria-label="Close">
           <i data-lucide="x"></i>
         </button>
       </div>

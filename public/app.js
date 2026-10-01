@@ -208,7 +208,46 @@ const Auth = (function() {
     safeCreateIcons();
   }
 
-  function openAuthModal(tab = 'login', { allowClose = false } = {}) {
+  const welcomePage = document.getElementById('welcome-page');
+  const appContainer = document.getElementById('app-container') || document.querySelector('.app-container');
+  const welcomeUserBanner = document.getElementById('welcome-user-banner');
+  const welcomeBannerUsername = document.getElementById('welcome-banner-username');
+
+  function showWelcomePage(show, { isReturningUser = false } = {}) {
+    if (!welcomePage) return;
+    if (show) {
+      welcomePage.style.display = 'flex';
+      welcomePage.style.opacity = '1';
+      document.body.classList.add('on-welcome-page');
+      
+      const user = currentUser;
+      if (user || isReturningUser) {
+        if (welcomeUserBanner) {
+          welcomeUserBanner.style.display = 'block';
+          if (welcomeBannerUsername) {
+            welcomeBannerUsername.textContent = (user && user.name) ? user.name : 'User';
+          }
+        }
+      } else {
+        if (welcomeUserBanner) welcomeUserBanner.style.display = 'none';
+      }
+
+      if (appContainer) {
+        appContainer.style.display = 'none';
+      }
+    } else {
+      welcomePage.style.opacity = '0';
+      welcomePage.style.display = 'none';
+      document.body.classList.remove('on-welcome-page');
+      if (welcomeUserBanner) welcomeUserBanner.style.display = 'none';
+      if (appContainer) {
+        appContainer.style.display = 'flex';
+      }
+    }
+    safeCreateIcons();
+  }
+
+  function openAuthModal(tab = 'login', { allowClose = true } = {}) {
     hideAuthAlert();
     switchTab(tab);
     if (modalAuth) modalAuth.classList.add('active');
@@ -222,11 +261,10 @@ const Auth = (function() {
       modalAuth._allowClose = allowClose;
     }
 
-    // Hide demo button when Supabase is configured (real accounts only)
+    // Ensure demo button remains easily accessible
     const demoFooter = document.getElementById('auth-demo-footer');
     if (demoFooter) {
-      const sbConfigured = window.SupabaseManager && window.SupabaseManager.isConfigured();
-      demoFooter.style.display = sbConfigured ? 'none' : 'block';
+      demoFooter.style.display = 'block';
     }
 
     safeCreateIcons();
@@ -267,37 +305,90 @@ const Auth = (function() {
     if (authAlert) authAlert.style.display = 'none';
   }
 
+  async function handleDemoLogin() {
+    hideAuthAlert();
+    try {
+      if (typeof showToast === 'function') {
+        showToast('Entering Live Demo Mode...', 'sparkles');
+      }
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'demo@workspace.local', password: 'demo1234' })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // If demo account not registered yet on local server, register it
+        const regRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'Demo User', email: 'demo@workspace.local', password: 'demo1234' })
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok) {
+          showAuthAlert(regData.error || 'Failed to start demo mode');
+          return false;
+        }
+        setSession(regData.token, regData.user);
+      } else {
+        setSession(data.token, data.user);
+      }
+      closeAuthModal();
+      showWelcomePage(false);
+      if (typeof showToast === 'function') {
+        showToast('Welcome to Live Demo mode! Enjoy exploring your workspace.', 'sparkles');
+      }
+      await initWorkspaceHub();
+      return true;
+    } catch (err) {
+      console.error('Demo error:', err);
+      showAuthAlert('Failed to connect to local server for demo mode.');
+      return false;
+    }
+  }
+
   async function handleLogin(email, password) {
     hideAuthAlert();
     try {
-      // 1. If Supabase is configured, use Supabase Cloud Auth
+      const cleanEmail = (email || '').trim().toLowerCase();
+      // If demo credentials, use demo login directly
+      if (cleanEmail === 'demo@workspace.local') {
+        return await handleDemoLogin();
+      }
+
+      // 1. If Supabase is configured, try Supabase Cloud Auth first
       if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
-        const { user, session } = await window.SupabaseManager.signIn(email, password);
-        const userData = {
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0] || 'User',
-          avatar: user.user_metadata?.avatar_url || null,
-          provider: 'supabase'
-        };
-        setSession(session.access_token, userData);
-        closeAuthModal();
-        if (typeof showToast === 'function') {
-          showToast(`Welcome back, ${userData.name}!`, 'shield-check');
+        try {
+          const { user, session } = await window.SupabaseManager.signIn(cleanEmail, password);
+          const userData = {
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0] || 'User',
+            avatar: user.user_metadata?.avatar_url || null,
+            provider: 'supabase'
+          };
+          setSession(session.access_token, userData);
+          closeAuthModal();
+          if (typeof showToast === 'function') {
+            showToast(`Welcome back, ${userData.name}!`, 'shield-check');
+          }
+          await initWorkspaceHub();
+          return true;
+        } catch (sbErr) {
+          console.warn('[AUTH] Supabase sign in failed, trying local fallback:', sbErr.message);
+          // If Supabase failed, fall through to local fallback
         }
-        await initWorkspaceHub();
-        return true;
       }
 
       // 2. Local Fallback Auth
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: cleanEmail, password })
       });
       const data = await res.json();
       if (!res.ok) {
-        showAuthAlert(data.error || 'Failed to sign in');
+        showAuthAlert(data.error || 'Failed to sign in. Please check your credentials.');
         return false;
       }
       setSession(data.token, data.user);
@@ -317,31 +408,41 @@ const Auth = (function() {
   async function handleRegister(name, email, password) {
     hideAuthAlert();
     try {
-      // 1. If Supabase is configured, use Supabase Cloud Auth
-      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
-        const { user, session } = await window.SupabaseManager.signUp(name, email, password);
-        const userData = {
-          id: user.id,
-          email: user.email,
-          name: name.trim(),
-          avatar: null,
-          provider: 'supabase'
-        };
-        const token = session ? session.access_token : `sb_user_${user.id}`;
-        setSession(token, userData);
-        closeAuthModal();
-        if (typeof showToast === 'function') {
-          showToast(`Account created! Welcome, ${name}! ☁️ Your workspace is cloud-synced.`, 'check-circle-2');
+      const cleanEmail = (email || '').trim().toLowerCase();
+      // 1. If Supabase is configured, try Supabase Cloud Auth (unless local domain)
+      if (!cleanEmail.endsWith('.local') && window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        try {
+          const { user, session } = await window.SupabaseManager.signUp(name, cleanEmail, password);
+          if (!session && user) {
+            showAuthAlert('Account created! Please check your email to confirm registration.', 'info');
+            return true;
+          }
+          const userData = {
+            id: user.id,
+            email: user.email,
+            name: name.trim(),
+            avatar: null,
+            provider: 'supabase'
+          };
+          const token = session ? session.access_token : `sb_user_${user.id}`;
+          setSession(token, userData);
+          closeAuthModal();
+          if (typeof showToast === 'function') {
+            showToast(`Account created! Welcome, ${name}! ☁️ Your workspace is cloud-synced.`, 'check-circle-2');
+          }
+          await initWorkspaceHub();
+          return true;
+        } catch (sbErr) {
+          console.warn('[AUTH] Supabase sign up failed, trying local fallback:', sbErr.message);
+          // If Supabase sign up failed, fall through to local fallback
         }
-        await initWorkspaceHub();
-        return true;
       }
 
       // 2. Local Fallback Auth
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name: name.trim(), email: cleanEmail, password })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -399,6 +500,7 @@ const Auth = (function() {
     currentUser = user;
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
+      showWelcomePage(false);
     } else {
       localStorage.removeItem(TOKEN_KEY);
     }
@@ -437,9 +539,14 @@ const Auth = (function() {
       } catch (e) {
         console.warn('Supabase checkSession warning:', e);
       }
+      // Supabase is active but no Supabase session found — clear any old local token and require login
+      localStorage.removeItem(TOKEN_KEY);
+      authToken = null;
+      updateUIForUser(null);
+      return null;  // Force login via Supabase
     }
 
-    // 2. Fallback check local session
+    // 2. Local-only fallback (only used when Supabase is NOT configured)
     if (!authToken) {
       updateUIForUser(null);
       return null;
@@ -576,13 +683,9 @@ const Auth = (function() {
 
     // Quick Demo account
     if (btnDemoLogin) {
-      btnDemoLogin.addEventListener('click', () => {
-        handleLogin('demo@workspace.local', 'demo1234').then(success => {
-          if (!success) {
-            // If demo account not registered yet, auto-register it!
-            handleRegister('Demo User', 'demo@workspace.local', 'demo1234');
-          }
-        });
+      btnDemoLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleDemoLogin();
       });
     }
 
@@ -665,6 +768,55 @@ const Auth = (function() {
       });
     }
 
+    // Welcome Page Action Triggers
+    const btnWelcomeDemoNav = document.getElementById('btn-welcome-demo-nav');
+    const btnWelcomeLoginNav = document.getElementById('btn-welcome-login-nav');
+    const btnWelcomeRegisterNav = document.getElementById('btn-welcome-register-nav');
+    const btnHeroRegister = document.getElementById('btn-hero-register');
+    const btnHeroLogin = document.getElementById('btn-hero-login');
+    const btnHeroDemo = document.getElementById('btn-hero-demo');
+    const btnBannerRegister = document.getElementById('btn-banner-register');
+    const btnBannerDemo = document.getElementById('btn-banner-demo');
+    const btnBannerReturn = document.getElementById('btn-banner-return');
+    const btnDropdownWelcome = document.getElementById('btn-dropdown-welcome');
+
+    if (btnWelcomeLoginNav) {
+      btnWelcomeLoginNav.addEventListener('click', () => openAuthModal('login', { allowClose: true }));
+    }
+    if (btnHeroLogin) {
+      btnHeroLogin.addEventListener('click', () => openAuthModal('login', { allowClose: true }));
+    }
+    if (btnWelcomeRegisterNav) {
+      btnWelcomeRegisterNav.addEventListener('click', () => openAuthModal('register', { allowClose: true }));
+    }
+    if (btnHeroRegister) {
+      btnHeroRegister.addEventListener('click', () => openAuthModal('register', { allowClose: true }));
+    }
+    if (btnBannerRegister) {
+      btnBannerRegister.addEventListener('click', () => openAuthModal('register', { allowClose: true }));
+    }
+
+    // Demo triggers
+    function launchDemoMode(e) {
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      handleDemoLogin();
+    }
+
+    if (btnWelcomeDemoNav) btnWelcomeDemoNav.addEventListener('click', launchDemoMode);
+    if (btnHeroDemo) btnHeroDemo.addEventListener('click', launchDemoMode);
+    if (btnBannerDemo) btnBannerDemo.addEventListener('click', launchDemoMode);
+
+    if (btnBannerReturn) {
+      btnBannerReturn.addEventListener('click', () => showWelcomePage(false));
+    }
+
+    if (btnDropdownWelcome) {
+      btnDropdownWelcome.addEventListener('click', () => {
+        if (userDropdownMenu) userDropdownMenu.style.display = 'none';
+        showWelcomePage(true, { isReturningUser: true });
+      });
+    }
+
     // Logout
     if (btnDropdownLogout) {
       btnDropdownLogout.addEventListener('click', async () => {
@@ -680,8 +832,8 @@ const Auth = (function() {
         dbData = { categories: [], items: [] };
         workspaces = [];
         if (typeof renderItems === 'function') renderItems();
-        // Always show auth modal after logout
-        openAuthModal('login');
+        // Return to welcoming page on logout
+        showWelcomePage(true);
       });
     }
   }
@@ -692,70 +844,84 @@ const Auth = (function() {
     checkSession,
     openAuthModal,
     closeAuthModal,
+    showWelcome: showWelcomePage,
     setupEvents,
     handleGoogleAuth,
+    handleDemoLogin,
     setSession,
     clearSession,
     updateUI: () => updateUIForUser(currentUser)
   };
 })();
 
+// Expose Auth globally for direct button access
+window.Auth = Auth;
+
 // Load data on page load
 onReady(async () => {
   safeCreateIcons();
 
-  // Show loading overlay while app initializes
-  showAppLoading(true);
+  // 1. Immediately setup all button and auth event listeners so UI is responsive without delay
+  try {
+    Auth.setupEvents();
+  } catch (err) {
+    console.error('Error setting up Auth events:', err);
+  }
 
-  // Initialize Supabase Manager — fetches keys from server .env
+  // 2. Initialize Supabase Manager in non-blocking try-catch
   if (window.SupabaseManager) {
-    await window.SupabaseManager.init();
+    try {
+      await window.SupabaseManager.init();
 
-    // Listen for Auth state changes across tabs/devices
-    const client = window.SupabaseManager.getClient();
-    if (client) {
-      client.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          if (session && session.user) {
-            const u = session.user;
-            Auth.setSession(session.access_token, {
-              id: u.id,
-              email: u.email,
-              name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
-              avatar: u.user_metadata?.avatar_url || null,
-              provider: 'supabase'
-            });
-            showAppLoading(false);
+      // Listen for Auth state changes across tabs/devices
+      const client = window.SupabaseManager.getClient();
+      if (client) {
+        client.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+            if (session && session.user) {
+              const u = session.user;
+              Auth.setSession(session.access_token, {
+                id: u.id,
+                email: u.email,
+                name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
+                avatar: u.user_metadata?.avatar_url || null,
+                provider: 'supabase'
+              });
+              showAppLoading(false);
+              Auth.showWelcome(false);
+              await initWorkspaceHub();
+            }
+          } else if (event === 'SIGNED_OUT') {
+            Auth.clearSession();
             await initWorkspaceHub();
-          }
-        } else if (event === 'SIGNED_OUT') {
-          Auth.clearSession();
-          await initWorkspaceHub();
-          // If Supabase is configured, force re-login
-          if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
             showAppLoading(false);
-            Auth.openAuthModal('login');
+            Auth.showWelcome(true);
           }
-        }
-      });
+        });
+      }
+    } catch (sbErr) {
+      console.warn('Supabase initialization warning:', sbErr);
     }
   }
 
-  Auth.setupEvents();
-  const loggedInUser = await Auth.checkSession();
+  // 3. Check existing user session
+  let loggedInUser = null;
+  try {
+    loggedInUser = await Auth.checkSession();
+  } catch (err) {
+    console.warn('Check session error:', err);
+  }
 
   // ── KEY BEHAVIOUR ──
-  // If Supabase is configured but no one is logged in → show login screen
-  if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
-    if (!loggedInUser) {
-      showAppLoading(false);
-      Auth.openAuthModal('login');
-      // Show empty workspace shell but blocked
-      setupEventListeners();
-      return; // don't load any data
-    }
+  // If no one is logged in → show the Welcoming Landing Page first!
+  if (!loggedInUser) {
+    showAppLoading(false);
+    Auth.showWelcome(true);
+    setupEventListeners();
+    return; // User can choose to sign in or explore demo
   }
 
+  Auth.showWelcome(false);
   showAppLoading(false);
   await initWorkspaceHub();
   setupEventListeners();
