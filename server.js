@@ -1237,17 +1237,26 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+function startServer() {
+  app.listen(PORT, () => {
+    console.log(`Workspace server is running at http://localhost:${PORT}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Close the other app instance or run on another port with PORT=3001.`);
+      process.exit(1);
+    }
+    console.error('[SERVER] Failed to start server:', err.message);
+    process.exit(1);
+  });
+}
+
 // Start Server (when run standalone)
 if (require.main === module || !process.env.VERCEL) {
   ensureDefaultAdminUser().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Workspace server is running at http://localhost:${PORT}`);
-    });
+    startServer();
   }).catch((err) => {
     console.error('[AUTH] Failed to initialize admin account:', err);
-    app.listen(PORT, () => {
-      console.log(`Workspace server is running at http://localhost:${PORT}`);
-    });
+    startServer();
   });
 }
 

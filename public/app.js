@@ -362,36 +362,13 @@ const Auth = (function () {
         return await handleDemoLogin();
       }
 
-      let localLoginError = null;
+      let supabaseError = null;
+      const useSupabase = !cleanEmail.endsWith('.local') &&
+        window.SupabaseManager && window.SupabaseManager.isConfigured();
 
-      // 1. Prefer local account first so a local user is not blocked by a Supabase
-      // project mismatch, email-confirmation requirement, or stale cloud config.
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          setSession(data.token, data.user);
-          closeAuthModal();
-          if (typeof showToast === 'function') {
-            showToast(`Welcome back, ${data.user.name}!`, 'shield-check');
-          }
-          await initWorkspaceHub();
-          return true;
-        }
-
-        localLoginError = data.error || 'Failed to sign in. Please check your credentials.';
-      } catch (localErr) {
-        console.warn('[AUTH] Local login failed, will try Supabase if configured:', localErr.message);
-        localLoginError = localErr.message || 'Failed to sign in. Please check your credentials.';
-      }
-
-      // 2. If Supabase is configured and local login did not succeed, try cloud auth.
-      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      // 1. Real email accounts: try Supabase Cloud Auth first. On serverless hosts
+      // (Vercel) the local users.json store does not exist / persist.
+      if (useSupabase) {
         try {
           const { user, session } = await window.SupabaseManager.signIn(cleanEmail, password);
           const userData = {
@@ -410,21 +387,39 @@ const Auth = (function () {
           await initWorkspaceHub();
           return true;
         } catch (sbErr) {
-          console.warn('[AUTH] Supabase sign in failed:', sbErr.message);
-
-          // If the local account exists but credentials are wrong, keep the local error.
-          // If there is no local account, surface the Supabase error so the user is told why.
-          if (localLoginError && localLoginError.toLowerCase().includes('invalid email or password')) {
-            showAuthAlert(localLoginError);
-            return false;
-          }
-
-          showAuthAlert(sbErr.message || 'Failed to sign in. Please check your credentials.');
-          return false;
+          console.warn('[AUTH] Supabase sign in failed, trying local account:', sbErr.message);
+          supabaseError = sbErr.message || null;
         }
       }
 
-      showAuthAlert(localLoginError || 'Failed to sign in. Please check your credentials.');
+      // 2. Local account fallback (works when running the server locally).
+      let localLoginError = null;
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          setSession(data.token, data.user);
+          closeAuthModal();
+          if (typeof showToast === 'function') {
+            showToast(`Welcome back, ${data.user.name}!`, 'shield-check');
+          }
+          await initWorkspaceHub();
+          return true;
+        }
+
+        localLoginError = data.error || null;
+      } catch (localErr) {
+        console.warn('[AUTH] Local login failed:', localErr.message);
+        localLoginError = localErr.message || null;
+      }
+
+      // Prefer the Supabase error (e.g. "Email not confirmed") since it is more specific.
+      showAuthAlert(supabaseError || localLoginError || 'Failed to sign in. Please check your credentials.');
       return false;
     } catch (err) {
       console.error('Login error:', err);

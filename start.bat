@@ -14,11 +14,19 @@ if errorlevel 1 goto NO_NODE
 :: Install dependencies if node_modules doesn't exist
 if not exist node_modules goto INSTALL_DEPS
 
+:: Kill stale app instances on the default port before starting
+for /f "usebackq" %%p in (`powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique"`) do (
+  if not "%%p"=="" (
+    echo [INFO] Stopping stale process on port 3000 (PID %%p)
+    taskkill /PID %%p /F >nul 2>&1
+  )
+)
+
 :START_SERVER
 echo [INFO] Starting workspace server on port 3000...
 echo [INFO] Opening dashboard in browser...
 start "" http://localhost:3000
-node --watch server.js
+node server.js
 goto END
 
 :INSTALL_DEPS
