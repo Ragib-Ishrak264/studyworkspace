@@ -904,27 +904,38 @@ onReady(async () => {
       // Listen for Auth state changes across tabs/devices
       const client = window.SupabaseManager.getClient();
       if (client) {
-        client.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-            if (session && session.user) {
-              const u = session.user;
-              Auth.setSession(session.access_token, {
-                id: u.id,
-                email: u.email,
-                name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
-                avatar: u.user_metadata?.avatar_url || null,
-                provider: 'supabase'
-              });
-              showAppLoading(false);
-              Auth.showWelcome(false);
+        let lastHubUserId = null;
+        client.auth.onAuthStateChange((event, session) => {
+          // Defer out of the auth callback so we never call Supabase inside it (deadlock/loop risk)
+          setTimeout(async () => {
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+              if (session && session.user) {
+                const u = session.user;
+                Auth.setSession(session.access_token, {
+                  id: u.id,
+                  email: u.email,
+                  name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
+                  avatar: u.user_metadata?.avatar_url || null,
+                  provider: 'supabase'
+                });
+                showAppLoading(false);
+                Auth.showWelcome(false);
+                // Reload the hub only when the signed-in user actually changes,
+                // not on token refreshes / tab-focus SIGNED_IN repeats.
+                if (lastHubUserId !== u.id) {
+                  lastHubUserId = u.id;
+                  await initWorkspaceHub();
+                }
+              }
+            } else if (event === 'SIGNED_OUT') {
+              lastHubUserId = null;
+              _realtimeSubscribedWorkspaceId = null;
+              Auth.clearSession();
               await initWorkspaceHub();
+              showAppLoading(false);
+              Auth.showWelcome(true);
             }
-          } else if (event === 'SIGNED_OUT') {
-            Auth.clearSession();
-            await initWorkspaceHub();
-            showAppLoading(false);
-            Auth.showWelcome(true);
-          }
+          }, 0);
         });
       }
     } catch (sbErr) {
@@ -1057,7 +1068,14 @@ function renderWorkspacesDropdown() {
 }
 
 // Fetch all items and root folders for active workspace
-async function fetchWorkspaceData() {
+let _realtimeSubscribedWorkspaceId = null;
+let _realtimeRefreshTimer = null;
+let _fetchInFlight = false;
+
+async function fetchWorkspaceData(opts = {}) {
+  const silent = !!opts.silent; // silent = realtime refresh: keep filters, don't resubscribe
+  if (_fetchInFlight && silent) return; // drop overlapping realtime refreshes
+  _fetchInFlight = true;
   try {
     // 1. Supabase Cloud Data & Realtime Sync
     if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
@@ -1071,13 +1089,17 @@ async function fetchWorkspaceData() {
         window.dbData = dbData;
         window.activeWorkspaceId = activeWorkspaceId;
 
-        // Subscribe to real-time changes
-        window.SupabaseManager.subscribeRealtime(activeWorkspaceId, () => {
-          fetchWorkspaceData();
-        });
+        // Subscribe to real-time changes only once per workspace, debounced
+        if (_realtimeSubscribedWorkspaceId !== activeWorkspaceId) {
+          _realtimeSubscribedWorkspaceId = activeWorkspaceId;
+          window.SupabaseManager.subscribeRealtime(activeWorkspaceId, () => {
+            clearTimeout(_realtimeRefreshTimer);
+            _realtimeRefreshTimer = setTimeout(() => fetchWorkspaceData({ silent: true }), 800);
+          });
+        }
 
         populateCategoriesDropdowns();
-        resetFilters();
+        if (!silent) resetFilters();
         updateUI();
         return;
       }
@@ -1102,10 +1124,12 @@ async function fetchWorkspaceData() {
     }
 
     populateCategoriesDropdowns();
-    resetFilters();
+    if (!silent) resetFilters();
     updateUI();
   } catch (error) {
     console.error(`Error loading data for workspace ${activeWorkspaceId}:`, error);
+  } finally {
+    _fetchInFlight = false;
   }
 }
 
