@@ -165,7 +165,11 @@ async function authenticateToken(req, res, next) {
   // 1. Try Supabase verification if Supabase is active
   if (supabaseClient) {
     try {
-      const { data: { user }, error } = await supabaseClient.auth.getUser(token);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase auth timeout')), 2000));
+      const { data: { user }, error } = await Promise.race([
+        supabaseClient.auth.getUser(token),
+        timeoutPromise
+      ]);
       if (!error && user) {
         req.user = {
           id: user.id,
@@ -203,7 +207,11 @@ async function optionalAuthenticateToken(req, res, next) {
   if (token) {
     if (supabaseClient) {
       try {
-        const { data: { user } } = await supabaseClient.auth.getUser(token);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase auth timeout')), 1500));
+        const { data: { user } } = await Promise.race([
+          supabaseClient.auth.getUser(token),
+          timeoutPromise
+        ]);
         if (user) {
           req.user = {
             id: user.id,
@@ -1259,5 +1267,13 @@ if (require.main === module || !process.env.VERCEL) {
     startServer();
   });
 }
+
+// Global process error handlers to prevent unexpected crashes
+process.on('uncaughtException', (err) => {
+  console.error('[CRITICAL] Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('[WARNING] Unhandled promise rejection:', reason);
+});
 
 module.exports = app;

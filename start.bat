@@ -16,10 +16,10 @@ if not exist node_modules goto INSTALL_DEPS
 
 :: Use lightweight native netstat check or launch directly with memory limit
 :START_SERVER
-echo [INFO] Starting workspace server on port 3000 (low-RAM mode)...
+echo [INFO] Starting workspace server on port 3000...
 echo [INFO] Opening dashboard in browser...
 start "" http://localhost:3000
-node --max-old-space-size=128 server.js
+node server.js
 goto END
 
 :INSTALL_DEPS

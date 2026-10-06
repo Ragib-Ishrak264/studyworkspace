@@ -360,7 +360,15 @@ CREATE TRIGGER on_auth_user_created
 
   async function signOut() {
     if (client) {
-      await client.auth.signOut();
+      try {
+        // Race against a short 1200ms timeout so network delay or hanging auth calls never block logout
+        await Promise.race([
+          client.auth.signOut(),
+          new Promise(resolve => setTimeout(resolve, 1200))
+        ]);
+      } catch (e) {
+        console.warn('Supabase signOut warning:', e);
+      }
     }
   }
 

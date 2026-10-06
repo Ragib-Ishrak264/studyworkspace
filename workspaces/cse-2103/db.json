@@ -1,0 +1,88 @@
+{
+  "categories": [
+    "General",
+    "Work",
+    "Personal",
+    "Study",
+    "Finance"
+  ],
+  "items": [
+    {
+      "id": "item_1791306064886_vytm4",
+      "type": "file",
+      "title": "Cover-CSE_2103-2403013-00.pdf",
+      "fileName": "Cover-CSE_2103-2403013-00.pdf",
+      "fileSize": 223951,
+      "filePath": "/uploads/cse-2103/Cover-CSE_2103-2403013-00-1791306064877.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:04.886Z"
+    },
+    {
+      "id": "item_1791306065047_xwu7s",
+      "type": "file",
+      "title": "CSE 2103 DLD.pdf",
+      "fileName": "CSE 2103 DLD.pdf",
+      "fileSize": 10694810,
+      "filePath": "/uploads/cse-2103/CSE_2103_DLD-1791306064896.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.047Z"
+    },
+    {
+      "id": "item_1791306065061_0pccv",
+      "type": "file",
+      "title": "CSE2103_24 Assignment.pdf",
+      "fileName": "CSE2103_24 Assignment.pdf",
+      "fileSize": 230030,
+      "filePath": "/uploads/cse-2103/CSE2103_24_Assignment-1791306065057.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.061Z"
+    },
+    {
+      "id": "item_1791306065073_m30ss",
+      "type": "file",
+      "title": "dld 2403013.pdf",
+      "fileName": "dld 2403013.pdf",
+      "fileSize": 172206,
+      "filePath": "/uploads/cse-2103/dld_2403013-1791306065070.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.073Z"
+    },
+    {
+      "id": "item_1791306065086_r4ekb",
+      "type": "file",
+      "title": "dld-assignment.docx",
+      "fileName": "dld-assignment.docx",
+      "fileSize": 119058,
+      "filePath": "/uploads/cse-2103/dld-assignment-1791306065082.docx",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.086Z"
+    },
+    {
+      "id": "item_1791306065128_wp9gd",
+      "type": "file",
+      "title": "Lecture 5.pdf",
+      "fileName": "Lecture 5.pdf",
+      "fileSize": 2147879,
+      "filePath": "/uploads/cse-2103/Lecture_5-1791306065097.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.128Z"
+    },
+    {
+      "id": "item_1791306065172_blcly",
+      "type": "file",
+      "title": "Lecture 6.pdf",
+      "fileName": "Lecture 6.pdf",
+      "fileSize": 2046678,
+      "filePath": "/uploads/cse-2103/Lecture_6-1791306065142.pdf",
+      "description": "",
+      "category": "General",
+      "createdAt": "2026-10-06T17:01:05.172Z"
+    }
+  ]
+}

@@ -94,7 +94,7 @@ body {
 }
 
 .sidebar-header {
-  padding: 24px;
+  padding: 20px 16px;
   border-bottom: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
@@ -104,16 +104,19 @@ body {
 .workspace-selector-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
+  box-sizing: border-box;
 }
 
 #workspace-select {
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
+  width: 0;
   background: #1e2535;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px;
+  padding: 7px 10px;
   color: var(--text-main);
   font-family: var(--font-sans);
   font-size: 0.85rem;
@@ -121,6 +124,10 @@ body {
   cursor: pointer;
   outline: none;
   transition: var(--transition-fast);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 #workspace-select:focus {
@@ -142,7 +149,8 @@ select option:checked {
 .workspace-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .workspace-actions button {
@@ -150,12 +158,16 @@ select option:checked {
   border: 1px solid var(--glass-border);
   color: var(--text-muted);
   cursor: pointer;
-  padding: 8px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: var(--radius-sm);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: var(--transition-fast);
+  box-sizing: border-box;
 }
 
 .workspace-actions button:hover {

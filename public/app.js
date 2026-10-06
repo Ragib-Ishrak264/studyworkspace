@@ -535,15 +535,15 @@ const Auth = (function () {
   }
 
   async function clearSession() {
+    authToken = null;
+    currentUser = null;
+    localStorage.removeItem(TOKEN_KEY);
+    updateUIForUser(null);
     if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
       try {
         await window.SupabaseManager.signOut();
       } catch (e) { }
     }
-    authToken = null;
-    currentUser = null;
-    localStorage.removeItem(TOKEN_KEY);
-    updateUIForUser(null);
   }
 
   async function checkSession() {
@@ -849,19 +849,19 @@ const Auth = (function () {
     if (btnDropdownLogout) {
       btnDropdownLogout.addEventListener('click', async () => {
         if (userDropdownMenu) userDropdownMenu.style.display = 'none';
-        try {
-          await fetch('/api/auth/logout', { method: 'POST' });
-        } catch (e) { }
-        await clearSession();
+        // 1. Immediately reset workspace state and navigate to welcome page for instant response
+        dbData = { categories: [], items: [] };
+        workspaces = [];
+        if (typeof renderGridItems === 'function') renderGridItems();
+        showWelcomePage(true);
         if (typeof showToast === 'function') {
           showToast('Signed out successfully', 'log-out');
         }
-        // Clear workspace UI
-        dbData = { categories: [], items: [] };
-        workspaces = [];
-        if (typeof renderItems === 'function') renderItems();
-        // Return to welcoming page on logout
-        showWelcomePage(true);
+        // 2. Perform background logout cleanup
+        try {
+          fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        } catch (e) { }
+        await clearSession();
       });
     }
   }
@@ -930,8 +930,10 @@ onReady(async () => {
             } else if (event === 'SIGNED_OUT') {
               lastHubUserId = null;
               _realtimeSubscribedWorkspaceId = null;
-              Auth.clearSession();
-              await initWorkspaceHub();
+              authToken = null;
+              currentUser = null;
+              localStorage.removeItem(TOKEN_KEY);
+              Auth.updateUI();
               showAppLoading(false);
               Auth.showWelcome(true);
             }
