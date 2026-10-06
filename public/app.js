@@ -1014,18 +1014,25 @@ async function initWorkspaceHub() {
 }
 
 // Fetch list of workspaces
-async function fetchWorkspaces() {
+async function fetchWorkspaces(preferredActiveId) {
   try {
+    if (preferredActiveId) {
+      activeWorkspaceId = preferredActiveId;
+    }
+
     // 1. Supabase Cloud Workspaces
     if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
       const sbData = await window.SupabaseManager.fetchWorkspaces();
       if (sbData && sbData.workspaces) {
         workspaces = sbData.workspaces;
-        if (!workspaces.some(w => w.id === activeWorkspaceId)) {
+        if (preferredActiveId && workspaces.some(w => w.id === preferredActiveId)) {
+          activeWorkspaceId = preferredActiveId;
+        } else if (!workspaces.some(w => w.id === activeWorkspaceId)) {
           activeWorkspaceId = sbData.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
         }
         window.workspaces = workspaces;
         window.activeWorkspaceId = activeWorkspaceId;
+        localStorage.setItem('activeWorkspaceId', activeWorkspaceId);
         renderWorkspacesDropdown();
         return;
       }
@@ -1037,10 +1044,15 @@ async function fetchWorkspaces() {
 
     const data = await response.json();
     workspaces = data.workspaces || [];
-    activeWorkspaceId = data.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
+    if (preferredActiveId && workspaces.some(w => w.id === preferredActiveId)) {
+      activeWorkspaceId = preferredActiveId;
+    } else if (!workspaces.some(w => w.id === activeWorkspaceId)) {
+      activeWorkspaceId = data.activeWorkspace || (workspaces[0] ? workspaces[0].id : 'default');
+    }
 
     window.workspaces = workspaces;
     window.activeWorkspaceId = activeWorkspaceId;
+    localStorage.setItem('activeWorkspaceId', activeWorkspaceId);
     renderWorkspacesDropdown();
   } catch (error) {
     console.error('Error fetching workspaces:', error);
@@ -1910,24 +1922,34 @@ function setupEventListeners() {
   workspaceSelect.addEventListener('change', async (e) => {
     const wsId = e.target.value;
     try {
-      const response = await fetch('/api/workspaces/active', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: wsId })
-      });
-      if (!response.ok) throw new Error('Failed to set active workspace');
-
       activeWorkspaceId = wsId;
+      window.activeWorkspaceId = activeWorkspaceId;
+      localStorage.setItem('activeWorkspaceId', wsId);
+
       if (activeWorkspaceId === 'default') {
         btnDeleteWorkspace.style.display = 'none';
       } else {
         btnDeleteWorkspace.style.display = 'inline-flex';
       }
 
+      // Immediately clear current items and folders before fetching the new workspace
+      dbData = { categories: ['General', 'Work', 'Personal', 'Study', 'Finance'], items: [] };
+      workspaceFolders = [];
+      updateUI();
+
+      // Notify backend if not in pure Supabase mode (non-blocking)
+      if (!window.SupabaseManager || !window.SupabaseManager.isConfigured()) {
+        fetch('/api/workspaces/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: wsId })
+        }).catch(() => {});
+      }
+
       await fetchWorkspaceData();
     } catch (err) {
-      console.error(err);
-      alert('Error switching workspaces');
+      console.error('Error switching workspace:', err);
+      showToast('Error loading workspace data', 'alert-triangle');
     }
   });
 
@@ -1950,29 +1972,46 @@ function setupEventListeners() {
   formAddWorkspace.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('workspace-name').value;
+    if (!name || !name.trim()) return;
 
     try {
+      let createdWs = null;
       if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
-        await window.SupabaseManager.createWorkspace(name);
+        createdWs = await window.SupabaseManager.createWorkspace(name.trim());
       } else {
         const response = await fetch('/api/workspaces', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+          body: JSON.stringify({ name: name.trim() })
         });
 
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to create workspace');
         }
+        const resData = await response.json();
+        createdWs = resData.newWorkspace;
       }
 
       modalAddWorkspace.classList.remove('active');
       formAddWorkspace.reset();
 
-      // Update state and load registry
-      await fetchWorkspaces();
+      // Explicitly switch active workspace to the newly created workspace
+      if (createdWs && createdWs.id) {
+        activeWorkspaceId = createdWs.id;
+        window.activeWorkspaceId = activeWorkspaceId;
+        localStorage.setItem('activeWorkspaceId', activeWorkspaceId);
+      }
+
+      // Immediately clear previous workspace items from UI
+      dbData = { categories: ['General', 'Work', 'Personal', 'Study', 'Finance'], items: [] };
+      workspaceFolders = [];
+      updateUI();
+
+      // Update state and load newly created workspace
+      await fetchWorkspaces(activeWorkspaceId);
       await fetchWorkspaceData();
+      showToast(`Created workspace "${name}"`, 'check');
     } catch (error) {
       console.error(error);
       alert(error.message || 'Error creating workspace');
@@ -1999,6 +2038,15 @@ function setupEventListeners() {
         });
         if (!response.ok) throw new Error('Failed to delete workspace');
       }
+
+      // Reset activeWorkspaceId so it switches back to default
+      activeWorkspaceId = 'default';
+      window.activeWorkspaceId = 'default';
+      localStorage.removeItem('activeWorkspaceId');
+
+      dbData = { categories: ['General', 'Work', 'Personal', 'Study', 'Finance'], items: [] };
+      workspaceFolders = [];
+      updateUI();
 
       await fetchWorkspaces();
       await fetchWorkspaceData();

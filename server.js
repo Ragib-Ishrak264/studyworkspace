@@ -915,13 +915,13 @@ app.delete('/api/workspaces/:id', authenticateToken, (req, res) => {
 // API: Set active workspace
 app.post('/api/workspaces/active', optionalAuthenticateToken, (req, res) => {
   const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Workspace ID required' });
   const userId = req.user ? req.user.id : null;
   const exists = registry.workspaces.find(ws => ws.id === id);
-  if (!exists) {
-    return res.status(404).json({ error: 'Workspace not found' });
+  if (exists) {
+    registry.activeWorkspace = id;
+    saveRegistry();
   }
-  registry.activeWorkspace = id;
-  saveRegistry();
 
   const userWorkspaces = userId
     ? registry.workspaces.filter(ws => !ws.ownerId || ws.ownerId === userId)
