@@ -567,14 +567,9 @@ const Auth = (function () {
       } catch (e) {
         console.warn('Supabase checkSession warning:', e);
       }
-      // Supabase is active but no Supabase session found — clear any old local token and require login
-      localStorage.removeItem(TOKEN_KEY);
-      authToken = null;
-      updateUIForUser(null);
-      return null;  // Force login via Supabase
     }
 
-    // 2. Local-only fallback (only used when Supabase is NOT configured)
+    // 2. Token fallback (for demo accounts, local auth, or restored tokens)
     if (!authToken) {
       updateUIForUser(null);
       return null;
@@ -585,7 +580,7 @@ const Auth = (function () {
       });
       if (res.ok) {
         const data = await res.json();
-        updateUIForUser(data.user);
+        setSession(authToken, data.user);
         return data.user;
       } else {
         clearSession();
@@ -1979,7 +1974,22 @@ function setupEventListeners() {
     try {
       let createdWs = null;
       if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
-        createdWs = await window.SupabaseManager.createWorkspace(name.trim());
+        try {
+          createdWs = await window.SupabaseManager.createWorkspace(name.trim());
+        } catch (sbErr) {
+          console.warn('Supabase createWorkspace failed, falling back to local backend:', sbErr);
+          const response = await fetch('/api/workspaces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim() })
+          });
+          if (response.ok) {
+            const resData = await response.json();
+            createdWs = resData.newWorkspace;
+          } else {
+            throw sbErr;
+          }
+        }
       } else {
         const response = await fetch('/api/workspaces', {
           method: 'POST',
@@ -2015,8 +2025,13 @@ function setupEventListeners() {
       await fetchWorkspaceData();
       showToast(`Created workspace "${name}"`, 'check');
     } catch (error) {
-      console.error(error);
-      alert(error.message || 'Error creating workspace');
+      console.error('Error creating workspace:', error);
+      if (error.message && error.message.includes('not logged in')) {
+        alert('Please sign in or use Demo mode to create workspaces.');
+        openAuthModal('login', { allowClose: true });
+      } else {
+        alert(error.message || 'Error creating workspace');
+      }
     }
   });
 

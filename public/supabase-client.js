@@ -380,8 +380,22 @@ CREATE TRIGGER on_auth_user_created
 
   async function getUser() {
     if (!client) return null;
-    const { data: { user } } = await client.auth.getUser();
-    return user;
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (user) return user;
+    } catch (e) { }
+
+    try {
+      const { data: { session } } = await client.auth.getSession();
+      if (session && session.user) return session.user;
+    } catch (e) { }
+
+    if (window.Auth && typeof window.Auth.getUser === 'function') {
+      const u = window.Auth.getUser();
+      if (u && u.id) return u;
+    }
+
+    return null;
   }
 
   async function updateUserProfile(name, newPassword) {
@@ -445,7 +459,7 @@ CREATE TRIGGER on_auth_user_created
   async function createWorkspace(name) {
     if (!client) return null;
     const user = await getUser();
-    if (!user) throw new Error('User not logged in');
+    if (!user) throw new Error('User not logged in. Please sign in to create workspaces.');
 
     const cleanName = name.trim();
     const id = `ws_${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now().toString().slice(-4)}`;
@@ -462,16 +476,18 @@ CREATE TRIGGER on_auth_user_created
 
     if (error) throw error;
 
-    // Create default categories
-    await client.from('categories').insert([
-      { user_id: user.id, workspace_id: id, name: 'General' },
-      { user_id: user.id, workspace_id: id, name: 'Work' },
-      { user_id: user.id, workspace_id: id, name: 'Personal' },
-      { user_id: user.id, workspace_id: id, name: 'Study' },
-      { user_id: user.id, workspace_id: id, name: 'Finance' }
-    ]);
+    // Create default categories (safe try-catch)
+    try {
+      await client.from('categories').insert([
+        { user_id: user.id, workspace_id: id, name: 'General' },
+        { user_id: user.id, workspace_id: id, name: 'Work' },
+        { user_id: user.id, workspace_id: id, name: 'Personal' },
+        { user_id: user.id, workspace_id: id, name: 'Study' },
+        { user_id: user.id, workspace_id: id, name: 'Finance' }
+      ]);
+    } catch (e) { }
 
-    return data[0];
+    return data && data[0] ? data[0] : { id, name: cleanName };
   }
 
   async function deleteWorkspace(id) {
