@@ -1345,11 +1345,13 @@ function createCardElement(item) {
     titleText = item.title || item.fileName || 'Untitled File';
     const ext = (item.fileName || '').split('.').pop().toLowerCase();
     const isPdf = ext === 'pdf';
+    const isPpt = ['ppt', 'pptx', 'pps', 'ppsx', 'potx', 'odp'].includes(ext);
+    const isSheet = ['xls', 'xlsx', 'csv'].includes(ext);
+    const isDoc = ['doc', 'docx', 'txt', 'md'].includes(ext);
     const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
     const isCode = ['js', 'ts', 'html', 'css', 'json', 'py', 'java', 'c', 'cpp'].includes(ext);
-    const isDoc = ['doc', 'docx', 'txt', 'md'].includes(ext);
-    const iconName = isPdf ? 'file-text' : isImg ? 'image' : isCode ? 'file-code' : isDoc ? 'file-text' : 'file';
-    const typeColorClass = isPdf ? 'pdf' : isImg ? 'img' : isCode ? 'code' : isDoc ? 'doc' : 'generic';
+    const iconName = isPdf ? 'file-text' : isPpt ? 'presentation' : isSheet ? 'table' : isDoc ? 'file-text' : isImg ? 'image' : isCode ? 'file-code' : 'file';
+    const typeColorClass = isPdf ? 'pdf' : isPpt ? 'ppt' : isSheet ? 'sheet' : isDoc ? 'doc' : isImg ? 'img' : isCode ? 'code' : 'generic';
 
     iconHTML = `<i data-lucide="${iconName}" class="mini-icon mini-icon-file file-${typeColorClass}"></i>`;
     metaHTML = `<span class="mini-meta-badge">${ext ? ext.toUpperCase() : 'FILE'}</span>`;
@@ -2832,7 +2834,7 @@ const FolderExplorer = (() => {
     const dateStr = file.modifiedAt ? formatDate(file.modifiedAt) : '';
     const fileUrl = `/uploads/${activeWorkspaceId}/${file.path}`;
     const ext = file.name.split('.').pop().toLowerCase();
-    const iconName = ['pdf'].includes(ext) ? 'file-text' : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) ? 'image' : 'file';
+    const iconName = ['pdf'].includes(ext) ? 'file-text' : ['ppt', 'pptx', 'pps', 'ppsx', 'potx', 'odp'].includes(ext) ? 'presentation' : ['xls', 'xlsx', 'csv'].includes(ext) ? 'table' : ['doc', 'docx', 'txt', 'md'].includes(ext) ? 'file-text' : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) ? 'image' : 'file';
 
     row.draggable = true;
     row.addEventListener('dragstart', (e) => {

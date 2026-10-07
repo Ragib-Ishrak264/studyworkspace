@@ -25,7 +25,7 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.5.2">
+  <link rel="stylesheet" href="style.css?v=2.5.3">
 </head>
 <body>
   <!-- ========================================================== -->
@@ -448,7 +448,7 @@
       <div class="sidebar-stats">
         <div class="stats-title">
           <i data-lucide="database"></i>
-          <span>Local Storage</span>
+          <span>Storage</span>
         </div>
         <div class="stats-info">
           <div class="stat-row">
@@ -654,7 +654,7 @@
           <i data-lucide="link-2"></i> Link
         </button>
         <button class="tab-btn" data-tab="form-upload-file">
-          <i data-lucide="file-up"></i> PDF / File
+          <i data-lucide="file-up"></i> File / PPT / PDF
         </button>
         <button class="tab-btn" data-tab="form-add-note">
           <i data-lucide="sticky-note"></i> Note
@@ -687,22 +687,22 @@
           <button type="submit" class="btn btn-primary btn-block">Save Link</button>
         </form>
 
-        <!-- Upload PDF Form -->
+        <!-- Upload PDF / PPT / File Form -->
         <form id="form-upload-file" class="modal-form-tab">
           <div class="form-group">
             <label for="file-title">Title (Optional)</label>
             <input type="text" id="file-title" placeholder="Leaves empty to use original filename">
           </div>
           <div class="form-group">
-            <label>Select PDF or File *</label>
+            <label>Select PowerPoint, PDF or File *</label>
             <div class="file-dropzone" id="file-dropzone">
               <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-              <p>Drag & Drop files here, or <span class="browse-text">browse files</span></p>
-              <input type="file" id="file-input" required accept=".pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple style="display: none;">
+              <p>Drag & Drop PowerPoint, PDF or files here, or <span class="browse-text">browse files</span></p>
+              <input type="file" id="file-input" required accept=".pdf,.ppt,.pptx,.pps,.ppsx,.potx,.odp,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" multiple style="display: none;">
             </div>
             <div class="selected-file-indicator" id="selected-file-info" style="display: none;">
               <i data-lucide="file"></i>
-              <span class="file-name-label" id="file-name-label">filename.pdf</span>
+              <span class="file-name-label" id="file-name-label">filename.pptx</span>
               <button type="button" class="btn-remove-selected-file" id="btn-remove-file">
                 <i data-lucide="trash-2"></i>
               </button>
@@ -1284,8 +1284,8 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Supabase Client & Cloud Manager -->
-  <script src="supabase-client.js?v=2.5.2"></script>
+  <script src="supabase-client.js?v=2.5.3"></script>
   <!-- Client JavaScript -->
-  <script src="app.js?v=2.5.2"></script>
+  <script src="app.js?v=2.5.3"></script>
 </body>
 </html>

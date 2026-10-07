@@ -576,6 +576,14 @@ select option:checked {
   color: #f87171;
   stroke: #f87171;
 }
+.mini-icon-file.file-ppt {
+  color: #fb923c;
+  stroke: #fb923c;
+}
+.mini-icon-file.file-sheet {
+  color: #34d399;
+  stroke: #34d399;
+}
 .mini-icon-file.file-img {
   color: #c084fc;
   stroke: #c084fc;
