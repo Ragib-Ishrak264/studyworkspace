@@ -1,9 +1,12 @@
-const CACHE_NAME = 'workspace-v1.0.0';
+const CACHE_NAME = 'workspace-v2.6.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/viewer.js',
+  '/vendor/pdfjs/pdf.min.js',
+  '/vendor/pdfjs/pdf.worker.min.js',
   '/lucide.min.js',
   '/manifest.json',
   '/icon.svg'

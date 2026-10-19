@@ -25,7 +25,7 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.5.3">
+  <link rel="stylesheet" href="style.css?v=2.6.0">
 </head>
 <body>
   <!-- ========================================================== -->
@@ -496,6 +496,11 @@
             <span id="supabase-status-text">Supabase Cloud</span>
           </button>
           
+          <button id="btn-open-viewer" class="btn btn-secondary btn-header-viewer" title="Open Dedicated PDF & File Viewer">
+            <i data-lucide="book-open"></i>
+            <span>PDF Viewer</span>
+          </button>
+          
           <button id="btn-new-item" class="btn btn-primary">
             <i data-lucide="plus-circle"></i>
             <span>Add Item</span>
@@ -930,6 +935,14 @@
       <i data-lucide="external-link"></i>
       <span>Open</span>
     </button>
+    <button class="context-menu-item" id="ctx-opt-viewer" style="display:none;">
+      <i data-lucide="book-open"></i>
+      <span>Open in PDF Viewer</span>
+    </button>
+    <button class="context-menu-item" id="ctx-opt-startover" style="display:none;">
+      <i data-lucide="rotate-ccw"></i>
+      <span>Start Over (Reset Progress)</span>
+    </button>
     <button class="context-menu-item" id="ctx-opt-download" style="display:none;">
       <i data-lucide="download"></i>
       <span>Download</span>
@@ -1280,12 +1293,282 @@
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Dedicated Document & PDF Viewer ("Workspace DocViewer")   -->
+  <!-- ========================================================== -->
+  <div class="docviewer-overlay" id="docviewer-overlay" role="dialog" aria-modal="true" aria-label="PDF and Document Viewer">
+    
+    <!-- Top Reading Progress Bar (Thin tracking bar 0-100%) -->
+    <div class="dv-reading-progress-track">
+      <div class="dv-reading-progress-bar" id="dv-reading-progress-bar" style="width: 0%;"></div>
+    </div>
+
+    <!-- Viewer Top Toolbar -->
+    <header class="dv-header" id="dv-header">
+      
+      <!-- Left: File identity, Icon, Size & Reading Progress Pill -->
+      <div class="dv-header-left">
+        <div class="dv-file-badge">
+          <span class="dv-file-icon" id="dv-file-icon">
+            <i data-lucide="file-text"></i>
+          </span>
+          <div class="dv-title-wrap">
+            <h2 class="dv-file-title" id="dv-file-title">Document</h2>
+            <span class="dv-file-size" id="dv-file-size"></span>
+          </div>
+        </div>
+        <div class="dv-progress-pill" id="dv-progress-pill" title="Current Reading Progress">
+          Page 1 of 1 (0%)
+        </div>
+      </div>
+
+      <!-- Center: Navigation & Zoom Controls -->
+      <div class="dv-header-center">
+        <!-- Pagination Controls (PDFs) -->
+        <div class="dv-control-group" id="dv-nav-group">
+          <button type="button" class="dv-btn-icon" id="dv-btn-first" title="First Page (Home)">
+            <i data-lucide="chevrons-left"></i>
+          </button>
+          <button type="button" class="dv-btn-icon" id="dv-btn-prev" title="Previous Page (← or PageUp)">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="dv-page-selector">
+            <input type="number" id="dv-page-input" class="dv-page-input" min="1" max="1" value="1" aria-label="Current page">
+            <span class="dv-page-slash">/</span>
+            <span class="dv-page-count" id="dv-page-count">1</span>
+          </div>
+          <button type="button" class="dv-btn-icon" id="dv-btn-next" title="Next Page (→ or PageDown)">
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button type="button" class="dv-btn-icon" id="dv-btn-last" title="Last Page (End)">
+            <i data-lucide="chevrons-right"></i>
+          </button>
+        </div>
+
+        <div class="dv-divider"></div>
+
+        <!-- Zoom & Scale Controls -->
+        <div class="dv-control-group" id="dv-zoom-group">
+          <button type="button" class="dv-btn-icon" id="dv-btn-zoom-out" title="Zoom Out (-)">
+            <i data-lucide="zoom-out"></i>
+          </button>
+          <select id="dv-zoom-select" class="dv-zoom-select" aria-label="Zoom Level">
+            <option value="width">Fit Width</option>
+            <option value="fit">Fit Page</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1">100%</option>
+            <option value="1.25">125%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+          </select>
+          <button type="button" class="dv-btn-icon" id="dv-btn-zoom-in" title="Zoom In (+)">
+            <i data-lucide="zoom-in"></i>
+          </button>
+          <button type="button" class="dv-btn-icon" id="dv-btn-rotate" title="Rotate 90° Clockwise (R)">
+            <i data-lucide="rotate-cw"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Actions, Start Over, Theme, Search, Sidebar, Local Open, Fullscreen, Close -->
+      <div class="dv-header-right">
+        
+        <!-- Prominent START OVER button -->
+        <button type="button" class="dv-btn-action dv-btn-startover" id="dv-btn-startover" title="Start over from beginning (Reset reading progress to Page 1)">
+          <i data-lucide="rotate-ccw"></i>
+          <span>Start Over</span>
+        </button>
+
+        <!-- Search in PDF -->
+        <button type="button" class="dv-btn-icon" id="dv-btn-search-toggle" title="Search in Document (Ctrl+F)">
+          <i data-lucide="search"></i>
+        </button>
+
+        <!-- Sidebar / Thumbnails / Outline Toggle -->
+        <button type="button" class="dv-btn-icon active" id="dv-btn-sidebar-toggle" title="Toggle Thumbnails & Outline Sidebar">
+          <i data-lucide="panel-left"></i>
+        </button>
+
+        <!-- Theme Switcher (Light / Dark / Sepia) -->
+        <button type="button" class="dv-btn-icon" id="dv-btn-theme" title="Reading Theme: Light / Dark / Sepia">
+          <i data-lucide="sun-medium"></i>
+        </button>
+
+        <!-- Open Local File -->
+        <button type="button" class="dv-btn-icon" id="dv-btn-open-local" title="Open any file from your device">
+          <i data-lucide="folder-open"></i>
+        </button>
+        <input type="file" id="dv-file-input" style="display:none;" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp,.svg,.gif,.mp4,.webm,.mp3,.wav,.json,.csv,.js,.ts,.py,.html,.css,.sql">
+
+        <!-- Download Active File -->
+        <button type="button" class="dv-btn-icon" id="dv-btn-download" title="Download File">
+          <i data-lucide="download"></i>
+        </button>
+
+        <!-- Fullscreen Mode -->
+        <button type="button" class="dv-btn-icon" id="dv-btn-fullscreen" title="Toggle Fullscreen (F)">
+          <i data-lucide="maximize"></i>
+        </button>
+
+        <!-- Close Button -->
+        <button type="button" class="dv-btn-icon dv-btn-close" id="dv-btn-close" title="Close Viewer (Esc)">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Floating "Resume Where You Left Off" Banner -->
+    <div class="dv-resume-banner" id="dv-resume-banner">
+      <div class="dv-resume-banner-content">
+        <i data-lucide="bookmark-check" class="dv-resume-icon"></i>
+        <span class="dv-resume-text" id="dv-resume-text">
+          Welcome back! You were on <strong>Page 12 of 85</strong> (14% read).
+        </span>
+      </div>
+      <div class="dv-resume-actions">
+        <button type="button" class="btn btn-sm btn-primary" id="dv-btn-resume-dismiss">
+          <span>Resume Reading</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" id="dv-btn-resume-startover">
+          <i data-lucide="rotate-ccw"></i>
+          <span>Start Over</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Collapsible Search Bar -->
+    <div class="dv-search-bar" id="dv-search-bar">
+      <div class="dv-search-inner">
+        <i data-lucide="search" class="dv-search-icon"></i>
+        <input type="text" id="dv-search-input" placeholder="Search in text..." autocomplete="off">
+        <span class="dv-search-match-info" id="dv-search-match-info"></span>
+        <button type="button" class="dv-btn-icon-sm" id="dv-btn-search-prev" title="Previous match (Shift+Enter)">
+          <i data-lucide="chevron-up"></i>
+        </button>
+        <button type="button" class="dv-btn-icon-sm" id="dv-btn-search-next" title="Next match (Enter)">
+          <i data-lucide="chevron-down"></i>
+        </button>
+        <button type="button" class="dv-btn-icon-sm" id="dv-btn-search-close" title="Close search (Esc)">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Workspace Viewer Body -->
+    <div class="dv-body">
+      
+      <!-- Collapsible Thumbnails & Bookmarks Sidebar -->
+      <aside class="dv-sidebar active" id="dv-sidebar">
+        <!-- Sidebar Navigation Tabs -->
+        <div class="dv-sidebar-tabs">
+          <button type="button" class="dv-sidebar-tab active" id="dv-tab-thumbs" title="Page Thumbnails">
+            <i data-lucide="layout-grid"></i>
+            <span>Pages</span>
+          </button>
+          <button type="button" class="dv-sidebar-tab" id="dv-tab-outline" title="Document Outline / Table of Contents">
+            <i data-lucide="list"></i>
+            <span>Outline</span>
+          </button>
+          <button type="button" class="dv-sidebar-tab" id="dv-tab-info" title="Reading Stats & Details">
+            <i data-lucide="info"></i>
+            <span>Stats</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Thumbnails Strip -->
+        <div class="dv-sidebar-pane" id="dv-pane-thumbs">
+          <div class="dv-thumbs-list" id="dv-thumbs-list">
+            <!-- Dynamically populated page thumbnails -->
+          </div>
+        </div>
+
+        <!-- Tab 2: Outline / Table of Contents -->
+        <div class="dv-sidebar-pane" id="dv-pane-outline" style="display:none;">
+          <div class="dv-outline-list" id="dv-outline-list">
+            <!-- Dynamically populated PDF bookmarks / outline -->
+          </div>
+        </div>
+
+        <!-- Tab 3: Reading Stats & Info -->
+        <div class="dv-sidebar-pane" id="dv-pane-info" style="display:none;">
+          <div class="dv-info-content" id="dv-info-content">
+            <!-- Dynamically populated stats -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- Central Viewport / Canvas Container -->
+      <main class="dv-viewport" id="dv-viewport">
+        
+        <!-- Loading Spinner -->
+        <div class="dv-loading" id="dv-loading">
+          <div class="dv-spinner"></div>
+          <span class="dv-loading-text" id="dv-loading-text">Loading document...</span>
+        </div>
+
+        <!-- Stage: PDF Continuous Scrollable Pages -->
+        <div class="dv-stage dv-pdf-stage" id="dv-pdf-stage" style="display:none;">
+          <div class="dv-pdf-pages-container" id="dv-pdf-pages-container"></div>
+        </div>
+
+        <!-- Stage: Formatted Text & Code View -->
+        <div class="dv-stage dv-text-stage" id="dv-text-stage" style="display:none;">
+          <div class="dv-text-container">
+            <div class="dv-text-content" id="dv-text-content"></div>
+          </div>
+        </div>
+
+        <!-- Stage: Formatted Markdown View -->
+        <div class="dv-stage dv-markdown-stage" id="dv-markdown-stage" style="display:none;">
+          <div class="dv-markdown-container">
+            <div class="dv-markdown-rendered" id="dv-markdown-rendered"></div>
+            <pre class="dv-markdown-raw" id="dv-markdown-raw" style="display:none;"></pre>
+          </div>
+        </div>
+
+        <!-- Stage: Image View -->
+        <div class="dv-stage dv-image-stage" id="dv-image-stage" style="display:none;">
+          <div class="dv-image-wrapper">
+            <img id="dv-image-el" alt="Image preview" />
+          </div>
+        </div>
+
+        <!-- Stage: Audio / Video Media View -->
+        <div class="dv-stage dv-media-stage" id="dv-media-stage" style="display:none;">
+          <div class="dv-media-container" id="dv-media-container"></div>
+        </div>
+
+        <!-- Stage: Unsupported / Fallback View -->
+        <div class="dv-stage dv-unsupported-stage" id="dv-unsupported-stage" style="display:none;">
+          <div class="dv-unsupported-info" id="dv-unsupported-info"></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <footer class="dv-footer">
+      <div class="dv-status-left">
+        <span id="dv-status-info">Ready</span>
+      </div>
+      <div class="dv-status-right">
+        <span class="dv-shortcut-hint" id="dv-status-shortcuts">
+          <kbd>←</kbd> <kbd>→</kbd> Pages &bull; <kbd>+</kbd> <kbd>-</kbd> Zoom &bull; <kbd>R</kbd> Rotate &bull; <kbd>F</kbd> Fullscreen &bull; <kbd>Esc</kbd> Close
+        </span>
+      </div>
+    </footer>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Supabase Client & Cloud Manager -->
   <script src="supabase-client.js?v=2.5.3"></script>
+  <!-- PDF.js Engine (Offline bundled) -->
+  <script src="vendor/pdfjs/pdf.min.js"></script>
+  <!-- Dedicated PDF & File Viewer Engine -->
+  <script src="viewer.js?v=2.6.0"></script>
   <!-- Client JavaScript -->
-  <script src="app.js?v=2.5.3"></script>
+  <script src="app.js?v=2.6.0"></script>
 </body>
 </html>

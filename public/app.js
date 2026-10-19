@@ -1348,8 +1348,17 @@ function createCardElement(item) {
     const iconName = isPdf ? 'file-text' : isPpt ? 'presentation' : isSheet ? 'table' : isDoc ? 'file-text' : isImg ? 'image' : isCode ? 'file-code' : 'file';
     const typeColorClass = isPdf ? 'pdf' : isPpt ? 'ppt' : isSheet ? 'sheet' : isDoc ? 'doc' : isImg ? 'img' : isCode ? 'code' : 'generic';
 
+    // Reading progress badge
+    let readBadgeHTML = '';
+    if (window.ReadingProgressManager) {
+      const prog = window.ReadingProgressManager.getProgress(item);
+      if (prog && (prog.page > 1 || prog.percentage > 0)) {
+        readBadgeHTML = `<span class="mini-read-badge" title="Reading Progress: Page ${prog.page} of ${prog.totalPages} (${prog.percentage}%)">📖 ${prog.percentage}% (Pg ${prog.page})</span>`;
+      }
+    }
+
     iconHTML = `<i data-lucide="${iconName}" class="mini-icon mini-icon-file file-${typeColorClass}"></i>`;
-    metaHTML = `<span class="mini-meta-badge">${ext ? ext.toUpperCase() : 'FILE'}</span>`;
+    metaHTML = `${readBadgeHTML}<span class="mini-meta-badge">${ext ? ext.toUpperCase() : 'FILE'}</span>`;
   } else if (item.type === 'note') {
     iconHTML = `<i data-lucide="sticky-note" class="mini-icon mini-icon-note"></i>`;
     metaHTML = `<span class="mini-meta-badge">NOTE</span>`;
@@ -1370,7 +1379,11 @@ function createCardElement(item) {
     if (item.type === 'link') {
       window.open(item.url, '_blank', 'noopener,noreferrer');
     } else if (item.type === 'file') {
-      window.open(item.filePath, '_blank');
+      if (window.WorkspaceViewer) {
+        window.WorkspaceViewer.open(item);
+      } else {
+        window.open(item.filePath, '_blank');
+      }
     } else if (item.type === 'note') {
       openNotePreview(item);
     }
@@ -1421,6 +1434,8 @@ const ctxIcon = document.getElementById('ctx-icon');
 const ctxTitle = document.getElementById('ctx-title');
 const ctxOptDetails = document.getElementById('ctx-opt-details');
 const ctxOptOpen = document.getElementById('ctx-opt-open');
+const ctxOptViewer = document.getElementById('ctx-opt-viewer');
+const ctxOptStartOver = document.getElementById('ctx-opt-startover');
 const ctxOptDownload = document.getElementById('ctx-opt-download');
 const ctxOptCopy = document.getElementById('ctx-opt-copy');
 const ctxOptMove = document.getElementById('ctx-opt-move');
@@ -1469,6 +1484,8 @@ function openContextMenu(e, target, type) {
     ctxOptRename.style.display = 'flex';
     ctxOptCopy.style.display = 'flex';
     ctxOptCopy.querySelector('span').textContent = 'Copy Folder Path';
+    if (ctxOptViewer) ctxOptViewer.style.display = 'none';
+    if (ctxOptStartOver) ctxOptStartOver.style.display = 'none';
   } else if (type === 'file') {
     ctxIcon.setAttribute('data-lucide', 'file-text');
     ctxOptDownload.style.display = 'flex';
@@ -1476,6 +1493,11 @@ function openContextMenu(e, target, type) {
     ctxOptRename.style.display = 'none';
     ctxOptCopy.style.display = 'flex';
     ctxOptCopy.querySelector('span').textContent = 'Copy File Link';
+    if (ctxOptViewer) ctxOptViewer.style.display = 'flex';
+    if (ctxOptStartOver) {
+      const prog = window.ReadingProgressManager ? window.ReadingProgressManager.getProgress(target) : null;
+      ctxOptStartOver.style.display = (prog && (prog.page > 1 || prog.percentage > 0)) ? 'flex' : 'none';
+    }
   } else if (type === 'link') {
     ctxIcon.setAttribute('data-lucide', 'link-2');
     ctxOptDownload.style.display = 'none';
@@ -1483,6 +1505,8 @@ function openContextMenu(e, target, type) {
     ctxOptRename.style.display = 'none';
     ctxOptCopy.style.display = 'flex';
     ctxOptCopy.querySelector('span').textContent = 'Copy Web URL';
+    if (ctxOptViewer) ctxOptViewer.style.display = 'none';
+    if (ctxOptStartOver) ctxOptStartOver.style.display = 'none';
   } else if (type === 'note') {
     ctxIcon.setAttribute('data-lucide', 'sticky-note');
     ctxOptDownload.style.display = 'none';
@@ -1490,6 +1514,8 @@ function openContextMenu(e, target, type) {
     ctxOptRename.style.display = 'none';
     ctxOptCopy.style.display = 'flex';
     ctxOptCopy.querySelector('span').textContent = 'Copy Note Content';
+    if (ctxOptViewer) ctxOptViewer.style.display = 'none';
+    if (ctxOptStartOver) ctxOptStartOver.style.display = 'none';
   }
 
   // Calculate position with viewport boundary checking
@@ -1574,12 +1600,36 @@ function setupContextMenuEvents() {
     } else if (activeContextType === 'link') {
       window.open(activeContextTarget.url, '_blank', 'noopener,noreferrer');
     } else if (activeContextType === 'file') {
-      const fileUrl = activeContextTarget.filePath || `/uploads/${activeWorkspaceId}/${activeContextTarget.path}`;
-      window.open(fileUrl, '_blank');
+      if (window.WorkspaceViewer) {
+        window.WorkspaceViewer.open(activeContextTarget);
+      } else {
+        const fileUrl = activeContextTarget.filePath || `/uploads/${activeWorkspaceId}/${activeContextTarget.path}`;
+        window.open(fileUrl, '_blank');
+      }
     } else if (activeContextType === 'note') {
       openNotePreview(activeContextTarget);
     }
   });
+
+  // Dedicated Open in PDF Viewer option
+  if (ctxOptViewer) {
+    ctxOptViewer.addEventListener('click', () => {
+      hideContextMenu();
+      if (activeContextTarget && window.WorkspaceViewer) {
+        window.WorkspaceViewer.open(activeContextTarget);
+      }
+    });
+  }
+
+  // Start Over (Reset Progress) option
+  if (ctxOptStartOver) {
+    ctxOptStartOver.addEventListener('click', () => {
+      hideContextMenu();
+      if (activeContextTarget && window.WorkspaceViewer) {
+        window.WorkspaceViewer.open(activeContextTarget, { forceStartOver: true });
+      }
+    });
+  }
 
   // Download option
   ctxOptDownload.addEventListener('click', () => {
@@ -2848,8 +2898,24 @@ const FolderExplorer = (() => {
     const sizeStr = formatBytes(file.size || 0);
     const dateStr = file.modifiedAt ? formatDate(file.modifiedAt) : '';
     const fileUrl = `/uploads/${activeWorkspaceId}/${file.path}`;
+    const fileTarget = {
+      title: file.name,
+      fileName: file.name,
+      filePath: fileUrl,
+      path: file.path,
+      size: file.size,
+      type: 'file'
+    };
     const ext = file.name.split('.').pop().toLowerCase();
     const iconName = ['pdf'].includes(ext) ? 'file-text' : ['ppt', 'pptx', 'pps', 'ppsx', 'potx', 'odp'].includes(ext) ? 'presentation' : ['xls', 'xlsx', 'csv'].includes(ext) ? 'table' : ['doc', 'docx', 'txt', 'md'].includes(ext) ? 'file-text' : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) ? 'image' : 'file';
+
+    let readBadgeHTML = '';
+    if (window.ReadingProgressManager) {
+      const prog = window.ReadingProgressManager.getProgress(fileTarget);
+      if (prog && (prog.page > 1 || prog.percentage > 0)) {
+        readBadgeHTML = `<span class="fr-read-badge" title="Reading Progress: Page ${prog.page} of ${prog.totalPages} (${prog.percentage}%)">📖 ${prog.percentage}% (Pg ${prog.page})</span>`;
+      }
+    }
 
     row.draggable = true;
     row.addEventListener('dragstart', (e) => {
@@ -2864,12 +2930,13 @@ const FolderExplorer = (() => {
     row.innerHTML = `
       <i data-lucide="${iconName}" class="fr-icon"></i>
       <div class="fr-name">
-        <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" title="${escapeHTML(file.name)}">${escapeHTML(file.name)}</a>
+        <a href="${fileUrl}" class="fr-open-link" title="${escapeHTML(file.name)}">${escapeHTML(file.name)}</a>
+        ${readBadgeHTML}
       </div>
       <span class="fr-size">${sizeStr}</span>
       <span class="fr-date">${dateStr}</span>
       <div class="fr-actions">
-        <a href="${fileUrl}" target="_blank" class="fr-action-btn" title="Open"><i data-lucide="eye"></i></a>
+        <a href="${fileUrl}" class="fr-action-btn fr-btn-open-view" title="Open in Viewer"><i data-lucide="eye"></i></a>
         <a href="${fileUrl}" download="${escapeHTML(file.name)}" class="fr-action-btn" title="Download"><i data-lucide="download"></i></a>
         <button class="fr-action-btn" data-action="move" title="Move to folder"><i data-lucide="folder-input"></i></button>
         <button class="fr-action-btn" data-action="rename" title="Rename file"><i data-lucide="pencil"></i></button>
@@ -2877,11 +2944,30 @@ const FolderExplorer = (() => {
       </div>
     `;
 
+    // Click on filename or eye -> open in Dedicated Viewer
+    const openLink = row.querySelector('.fr-open-link');
+    if (openLink) {
+      openLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.WorkspaceViewer) window.WorkspaceViewer.open(fileTarget);
+        else window.open(fileUrl, '_blank');
+      });
+    }
+
+    const openBtn = row.querySelector('.fr-btn-open-view');
+    if (openBtn) {
+      openBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.WorkspaceViewer) window.WorkspaceViewer.open(fileTarget);
+        else window.open(fileUrl, '_blank');
+      });
+    }
+
     // Right-click on file row -> show context menu
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openContextMenu(e, file, 'file');
+      openContextMenu(e, fileTarget, 'file');
     });
 
     row.querySelector('[data-action="move"]').addEventListener('click', () => openMoveFileModal(file));
@@ -3456,6 +3542,51 @@ const FolderExplorer = (() => {
       if (btnPwaInstall) btnPwaInstall.style.display = 'none';
       if (typeof showToast === 'function') {
         showToast('App installed on your device!');
+      }
+    });
+
+    // Wire PDF Viewer Header Button
+    const btnOpenViewer = document.getElementById('btn-open-viewer');
+    if (btnOpenViewer) {
+      btnOpenViewer.addEventListener('click', () => {
+        if (!window.WorkspaceViewer) return;
+        const allFiles = (dbData.items || []).filter(i => i.type === 'file');
+        let targetFile = null;
+
+        // Check if any file was read recently
+        if (window.ReadingProgressManager && allFiles.length > 0) {
+          let latestTime = 0;
+          for (const file of allFiles) {
+            const prog = window.ReadingProgressManager.getProgress(file);
+            if (prog && prog.lastReadAt) {
+              const time = new Date(prog.lastReadAt).getTime();
+              if (time > latestTime) {
+                latestTime = time;
+                targetFile = file;
+              }
+            }
+          }
+        }
+
+        // If no recently read file, pick the first PDF/file
+        if (!targetFile && allFiles.length > 0) {
+          targetFile = allFiles.find(i => (i.fileName || '').toLowerCase().endsWith('.pdf')) || allFiles[0];
+        }
+
+        if (targetFile) {
+          window.WorkspaceViewer.open(targetFile);
+        } else {
+          const fileInput = document.getElementById('dv-file-input');
+          if (fileInput) fileInput.click();
+        }
+      });
+    }
+
+    // Dynamic live refresh when reading progress is updated
+    window.addEventListener('workspace-reading-progress-updated', () => {
+      updateUI();
+      if (window.FolderExplorer && typeof window.FolderExplorer.fetchAndRender === 'function') {
+        window.FolderExplorer.fetchAndRender();
       }
     });
   });
