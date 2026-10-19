@@ -25,7 +25,7 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.6.0">
+  <link rel="stylesheet" href="style.css?v=2.7.0">
 </head>
 <body>
   <!-- ========================================================== -->
@@ -1380,6 +1380,12 @@
           <span>Start Over</span>
         </button>
 
+        <!-- Prominent Annotate / Edit button -->
+        <button type="button" class="dv-btn-action dv-btn-annotate" id="dv-btn-toggle-annotate" title="Draw, write, highlight and annotate on pages">
+          <i data-lucide="pen-tool"></i>
+          <span>Annotate</span>
+        </button>
+
         <!-- Search in PDF -->
         <button type="button" class="dv-btn-icon" id="dv-btn-search-toggle" title="Search in Document (Ctrl+F)">
           <i data-lucide="search"></i>
@@ -1453,6 +1459,83 @@
           <i data-lucide="x"></i>
         </button>
       </div>
+    </div>
+
+    <!-- Floating Drawing, Writing & Annotation Toolbar -->
+    <div class="dv-annotation-toolbar" id="dv-annotation-toolbar" style="display:none;">
+      <!-- Tool selectors -->
+      <div class="dv-annot-group">
+        <button type="button" class="dv-annot-tool-btn active" data-tool="select" title="Pan / Scroll Naturally (Hand)">
+          <i data-lucide="hand"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="pen" title="Freehand Pen (P)">
+          <i data-lucide="pencil"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="highlighter" title="Highlighter (H)">
+          <i data-lucide="highlighter"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="text" title="Text Box / Sticky Note (T)">
+          <i data-lucide="type"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="rect" title="Rectangle Shape">
+          <i data-lucide="square"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="circle" title="Circle Shape">
+          <i data-lucide="circle"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="arrow" title="Arrow / Pointer">
+          <i data-lucide="arrow-up-right"></i>
+        </button>
+        <button type="button" class="dv-annot-tool-btn" data-tool="eraser" title="Eraser (E)">
+          <i data-lucide="eraser"></i>
+        </button>
+      </div>
+
+      <div class="dv-annot-sep"></div>
+
+      <!-- Color Swatches -->
+      <div class="dv-annot-colors" id="dv-annot-colors">
+        <button type="button" class="dv-color-btn active" data-color="#f43f5e" style="--c:#f43f5e;" title="Coral Red"></button>
+        <button type="button" class="dv-color-btn" data-color="#facc15" style="--c:#facc15;" title="Yellow"></button>
+        <button type="button" class="dv-color-btn" data-color="#10b981" style="--c:#10b981;" title="Green"></button>
+        <button type="button" class="dv-color-btn" data-color="#38bdf8" style="--c:#38bdf8;" title="Blue"></button>
+        <button type="button" class="dv-color-btn" data-color="#a855f7" style="--c:#a855f7;" title="Purple"></button>
+        <button type="button" class="dv-color-btn" data-color="#ffffff" style="--c:#ffffff;" title="White"></button>
+        <button type="button" class="dv-color-btn" data-color="#090d16" style="--c:#090d16; border:1px solid #475569;" title="Black"></button>
+        <label class="dv-custom-color-label" title="Custom Color Picker">
+          <i data-lucide="palette"></i>
+          <input type="color" id="dv-annot-custom-color" value="#f43f5e">
+        </label>
+      </div>
+
+      <div class="dv-annot-sep"></div>
+
+      <!-- Stroke Width Selector -->
+      <div class="dv-annot-strokes" id="dv-annot-strokes">
+        <button type="button" class="dv-stroke-btn active" data-width="2" title="Fine (2px)"><span style="height:2px;"></span></button>
+        <button type="button" class="dv-stroke-btn" data-width="4" title="Medium (4px)"><span style="height:4px;"></span></button>
+        <button type="button" class="dv-stroke-btn" data-width="8" title="Thick (8px)"><span style="height:8px;"></span></button>
+        <button type="button" class="dv-stroke-btn" data-width="16" title="Wide Marker (16px)"><span style="height:12px;"></span></button>
+      </div>
+
+      <div class="dv-annot-sep"></div>
+
+      <!-- Undo, Redo, Clear Page -->
+      <div class="dv-annot-history">
+        <button type="button" class="dv-annot-action-btn" id="dv-btn-undo" title="Undo (Ctrl+Z)">
+          <i data-lucide="undo-2"></i>
+        </button>
+        <button type="button" class="dv-annot-action-btn" id="dv-btn-redo" title="Redo (Ctrl+Y)">
+          <i data-lucide="redo-2"></i>
+        </button>
+        <button type="button" class="dv-annot-action-btn danger" id="dv-btn-clear-annot" title="Clear All Drawings on This Page">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>
+
+      <button type="button" class="dv-annot-close" id="dv-btn-close-annot" title="Close Annotation Bar">
+        <i data-lucide="x"></i>
+      </button>
     </div>
 
     <!-- Main Workspace Viewer Body -->
@@ -1567,7 +1650,7 @@
   <!-- PDF.js Engine (Offline bundled) -->
   <script src="vendor/pdfjs/pdf.min.js"></script>
   <!-- Dedicated PDF & File Viewer Engine -->
-  <script src="viewer.js?v=2.6.0"></script>
+  <script src="viewer.js?v=2.7.0"></script>
   <!-- Client JavaScript -->
   <script src="app.js?v=2.6.0"></script>
 </body>

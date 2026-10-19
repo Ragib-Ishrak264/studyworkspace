@@ -5139,3 +5139,344 @@ select option:checked {
     margin-left: -200px;
   }
 }
+
+/* ==========================================================================
+ * Drawing, Writing & Annotation Editor Suite
+ * ========================================================================== */
+
+/* Header Annotate Button */
+.dv-btn-annotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dv-btn-annotate i {
+  width: 15px;
+  height: 15px;
+}
+
+.dv-btn-annotate:hover,
+.dv-btn-annotate.active {
+  background: rgba(14, 165, 233, 0.24);
+  border-color: rgba(14, 165, 233, 0.6);
+  color: #e0f2fe;
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.3);
+}
+
+/* Floating Annotation Toolbar */
+.dv-annotation-toolbar {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 40;
+  animation: annotDrop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 95vw;
+  overflow-x: auto;
+}
+
+@keyframes annotDrop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.dv-annot-group,
+.dv-annot-colors,
+.dv-annot-strokes,
+.dv-annot-history {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dv-annot-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.dv-annot-tool-btn,
+.dv-annot-action-btn,
+.dv-annot-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.dv-annot-tool-btn i,
+.dv-annot-action-btn i,
+.dv-annot-close i {
+  width: 16px;
+  height: 16px;
+}
+
+.dv-annot-tool-btn:hover,
+.dv-annot-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.dv-annot-tool-btn.active {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.25);
+}
+
+.dv-annot-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.dv-annot-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+/* Color Palette Buttons */
+.dv-color-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.dv-color-btn:hover {
+  transform: scale(1.15);
+}
+
+.dv-color-btn.active {
+  transform: scale(1.2);
+  border-color: #ffffff;
+  box-shadow: 0 0 8px var(--c);
+}
+
+.dv-custom-color-label {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.dv-custom-color-label i {
+  width: 16px;
+  height: 16px;
+}
+
+.dv-custom-color-label:hover {
+  color: #f1f5f9;
+}
+
+.dv-custom-color-label input[type="color"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* Stroke Width Buttons */
+.dv-stroke-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  transition: all 0.15s ease;
+}
+
+.dv-stroke-btn span {
+  display: block;
+  width: 100%;
+  background: #94a3b8;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.dv-stroke-btn:hover span {
+  background: #f1f5f9;
+}
+
+.dv-stroke-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dv-stroke-btn.active span {
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+/* Canvas Annotation Layer */
+.dv-annotation-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* When in drawing/editing mode */
+.dv-annotating-mode .dv-annotation-canvas {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.dv-annotating-mode[data-active-tool="select"] .dv-annotation-canvas {
+  pointer-events: none;
+  cursor: default;
+}
+
+.dv-annotating-mode[data-active-tool="text"] .dv-annotation-canvas {
+  cursor: text;
+}
+
+.dv-annotating-mode[data-active-tool="eraser"] .dv-annotation-canvas {
+  cursor: cell;
+}
+
+/* Text Annotations Container & Sticky Notes */
+.dv-text-annotations-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.dv-text-note-box {
+  position: absolute;
+  pointer-events: auto;
+  background: rgba(17, 24, 39, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 3px solid var(--note-color, #f43f5e);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 6px 8px;
+  min-width: 120px;
+  max-width: 280px;
+  color: #f1f5f9;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  cursor: move;
+  transition: box-shadow 0.15s ease;
+}
+
+.dv-text-note-box:focus-within {
+  border-color: #38bdf8;
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.3);
+}
+
+.dv-text-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  user-select: none;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.dv-text-note-delete {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.dv-text-note-delete:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.dv-text-note-delete i {
+  width: 12px;
+  height: 12px;
+}
+
+.dv-text-note-content {
+  outline: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: var(--note-color, #f1f5f9);
+  cursor: text;
+  min-height: 1.4em;
+}
+
+.dv-text-note-content:empty:before {
+  content: attr(data-placeholder);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.dv-text-note-drag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: grab;
+}
+
+.dv-text-note-drag:active {
+  cursor: grabbing;
+}
+
+.dv-text-note-drag i {
+  width: 12px;
+  height: 12px;
+}
