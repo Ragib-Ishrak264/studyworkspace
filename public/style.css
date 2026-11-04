@@ -371,6 +371,74 @@ select option:checked {
   margin-bottom: 16px;
 }
 
+/* ---- Header Navigation Arrows ------------------------------------------- */
+.hdr-nav-arrows {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.hdr-nav-arrows[hidden] { display: none; }
+
+.hdr-nav-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  flex: none;
+}
+.hdr-nav-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.18);
+  color: #c7d2fe;
+  transform: scale(1.08);
+}
+.hdr-nav-btn:active:not(:disabled) {
+  transform: scale(0.93);
+  background: rgba(99, 102, 241, 0.3);
+}
+.hdr-nav-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+.hdr-nav-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+.hdr-nav-btn svg {
+  display: block;
+  stroke: currentColor;
+  pointer-events: none;
+}
+/* Separator between back/forward and the Up button */
+.hdr-nav-up {
+  margin-left: 4px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.hdr-nav-up:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.5);
+}
+/* Divider line between nav arrows and title */
+.hdr-nav-arrows + .header-title-block {
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  margin-left: 2px;
+}
+
 .page-title {
   font-family: var(--font-display);
   font-weight: 700;

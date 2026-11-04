@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workspace-v2.9.5';
+const CACHE_NAME = 'workspace-v2.9.6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

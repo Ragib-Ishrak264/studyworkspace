@@ -27,7 +27,7 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.7.1">
+  <link rel="stylesheet" href="style.css?v=2.7.2">
 </head>
 <body>
   <!-- ========================================================== -->
@@ -474,6 +474,20 @@
           <button id="btn-mobile-menu" class="btn-mobile-menu" aria-label="Open navigation menu">
             <i data-lucide="menu"></i>
           </button>
+
+          <!-- Visual Navigation Arrows (shown when Browse view is active) -->
+          <div class="hdr-nav-arrows" id="hdr-nav-arrows" hidden>
+            <button type="button" class="hdr-nav-btn" id="hdr-nav-back" title="Go back (Alt+Left)" aria-label="Go back" disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <button type="button" class="hdr-nav-btn" id="hdr-nav-forward" title="Go forward (Alt+Right)" aria-label="Go forward" disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button type="button" class="hdr-nav-btn hdr-nav-up" id="hdr-nav-up" title="Go up to parent folder" aria-label="Up to parent folder" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+            </button>
+          </div>
+
           <div class="header-title-block">
             <h1 class="page-title">Workspace Dashboard</h1>
             <p class="page-subtitle">Your local repository of links, papers, and notes</p>
@@ -1703,6 +1717,6 @@
   <script src="dock.js?v=1.2.0"></script>
   <!-- Client JavaScript -->
   <script src="app.js?v=2.8.2"></script>
-  <script src="browse.js?v=1.4.2"></script>
+  <script src="browse.js?v=1.4.3"></script>
 </body>
 </html>
