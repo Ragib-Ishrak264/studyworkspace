@@ -620,7 +620,19 @@
     return rows.get(path) || null;
   }
 
-  window.Browse = { handles, render, hide, navigate, invalidate };
+  window.Browse = {
+    handles,
+    render,
+    hide,
+    navigate,
+    invalidate,
+    getPath: () => st.path,
+    resetPathIfDeleted(deletedPath) {
+      if (st.path === deletedPath || st.path.startsWith(deletedPath + '/')) {
+        navigateToPath(parentOf(deletedPath), false);
+      }
+    }
+  };
 
   const ready = () => { try { if (g('dbData') && handles()) render(); } catch (e) { /* app not ready yet */ } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready, { once: true }); else ready();

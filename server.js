@@ -1113,8 +1113,31 @@ app.delete('/api/workspaces/:workspaceId/folders', optionalAuthenticateToken, (r
   if (!folderPath) return res.status(400).json({ error: 'folderPath required' });
   const p = safeUploadsPath(workspaceId, folderPath);
   if (!p || p.resolved === p.base) return res.status(403).json({ error: 'Cannot delete root' });
-  if (!fs.existsSync(p.resolved)) return res.status(404).json({ error: 'Not found' });
-  fs.rmSync(p.resolved, { recursive: true, force: true });
+
+  // Delete physical directory if it exists on disk
+  if (fs.existsSync(p.resolved)) {
+    try {
+      fs.rmSync(p.resolved, { recursive: true, force: true });
+    } catch (rmErr) {
+      console.warn('Failed to delete directory from disk:', rmErr.message);
+    }
+  }
+
+  // Also clean up any items in db.json matching this folder or its subfolders
+  try {
+    const db = readWorkspaceDB(workspaceId);
+    const initialLen = db.items.length;
+    db.items = db.items.filter(item => {
+      if (!item.folder) return true;
+      return item.folder !== folderPath && !item.folder.startsWith(folderPath + '/');
+    });
+    if (db.items.length !== initialLen) {
+      writeWorkspaceDB(workspaceId, db);
+    }
+  } catch (dbErr) {
+    console.warn('Could not clean up items in db.json for folder:', dbErr.message);
+  }
+
   res.json({ message: 'Folder deleted' });
 });
 
@@ -1128,8 +1151,34 @@ app.patch('/api/workspaces/:workspaceId/folders', optionalAuthenticateToken, (re
   const cleanName = newName.trim().replace(/[<>:"/\\|?*]/g, '_');
   const newPath = path.join(path.dirname(p.resolved), cleanName);
   if (fs.existsSync(newPath)) return res.status(400).json({ error: 'Name already exists' });
-  fs.renameSync(p.resolved, newPath);
-  res.json({ name: cleanName, path: path.relative(p.base, newPath).replace(/\\/g, '/') });
+  if (fs.existsSync(p.resolved)) {
+    try {
+      fs.renameSync(p.resolved, newPath);
+    } catch (renErr) {
+      console.warn('Failed to rename directory on disk:', renErr.message);
+    }
+  }
+  const relNewPath = path.relative(p.base, newPath).replace(/\\/g, '/');
+
+  // Also update items in db.json
+  try {
+    const db = readWorkspaceDB(workspaceId);
+    let changed = false;
+    db.items.forEach(item => {
+      if (item.folder === folderPath) {
+        item.folder = relNewPath;
+        changed = true;
+      } else if (item.folder && item.folder.startsWith(folderPath + '/')) {
+        item.folder = relNewPath + item.folder.substring(folderPath.length);
+        changed = true;
+      }
+    });
+    if (changed) writeWorkspaceDB(workspaceId, db);
+  } catch (dbErr) {
+    console.warn('Could not rename folder items in db.json:', dbErr.message);
+  }
+
+  res.json({ name: cleanName, path: relNewPath });
 });
 
 // POST /api/workspaces/:wsId/upload-to-folder  — upload files into a folder
@@ -1243,8 +1292,31 @@ app.delete('/api/workspaces/:workspaceId/files', optionalAuthenticateToken, (req
   if (!filePath) return res.status(400).json({ error: 'filePath required' });
   const p = safeUploadsPath(workspaceId, filePath);
   if (!p) return res.status(403).json({ error: 'Forbidden' });
-  if (!fs.existsSync(p.resolved)) return res.status(404).json({ error: 'File not found' });
-  fs.unlinkSync(p.resolved);
+  if (fs.existsSync(p.resolved)) {
+    try {
+      fs.unlinkSync(p.resolved);
+    } catch (unErr) {
+      console.warn('Failed to delete file from disk:', unErr.message);
+    }
+  }
+
+  // Also clean up db.items if it was in db.json
+  try {
+    const db = readWorkspaceDB(workspaceId);
+    const initialLen = db.items.length;
+    const cleanFilePath = filePath.replace(/\\/g, '/');
+    db.items = db.items.filter(item => {
+      if (item.type !== 'file' || !item.filePath) return true;
+      const itPath = item.filePath.replace(/\\/g, '/');
+      return !itPath.endsWith('/' + cleanFilePath) && itPath !== `/uploads/${workspaceId}/${cleanFilePath}`;
+    });
+    if (db.items.length !== initialLen) {
+      writeWorkspaceDB(workspaceId, db);
+    }
+  } catch (dbErr) {
+    console.warn('Could not clean up file in db.json:', dbErr.message);
+  }
+
   res.json({ message: 'File deleted' });
 });
 

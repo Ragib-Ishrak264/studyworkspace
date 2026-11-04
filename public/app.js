@@ -3082,56 +3082,151 @@ const FolderExplorer = (() => {
   }
 
   async function deleteFolder(folder) {
-    if (!confirm(`Delete folder "${folder.name}" and ALL its contents? This cannot be undone.`)) return;
+    if (!folder) return;
+    const folderName = folder.name || folder.path || 'this folder';
+    const folderPath = folder.path || folder.name || '';
+    if (!folderPath) return;
+
+    if (!confirm(`Delete folder "${folderName}" and ALL its contents? This cannot be undone.`)) return;
+
     try {
-      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath: folder.path })
-      });
-      if (!res.ok) {
-        let errMsg = 'Failed to delete folder';
+      let supabaseHandled = false;
+      // 1. Supabase Cloud deletion
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
         try {
-          const err = await res.json();
-          errMsg = err.error || errMsg;
-        } catch {
-          errMsg = `Server returned ${res.status}: ${res.statusText}`;
+          await window.SupabaseManager.deleteFolder(activeWorkspaceId, folderPath, folder.id);
+          supabaseHandled = true;
+        } catch (sbErr) {
+          console.warn('Supabase deleteFolder error:', sbErr);
+          if (currentUser && currentUser.provider === 'supabase') {
+            throw sbErr;
+          }
         }
-        throw new Error(errMsg);
       }
-      // If we were inside this folder, go up
-      if (currentFolderPath === folder.path || currentFolderPath.startsWith(folder.path + '/')) {
-        currentFolderPath = folder.path.includes('/') ? folder.path.substring(0, folder.path.lastIndexOf('/')) : '';
+
+      // 2. Local disk backend
+      try {
+        const res = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderPath })
+        });
+        if (!res.ok && !supabaseHandled) {
+          let errMsg = 'Failed to delete folder';
+          try {
+            const err = await res.json();
+            errMsg = err.error || errMsg;
+          } catch {
+            errMsg = `Server returned ${res.status}: ${res.statusText}`;
+          }
+          throw new Error(errMsg);
+        }
+      } catch (localErr) {
+        if (!supabaseHandled) throw localErr;
       }
-      await fetchAndRender();
+
+      // 3. Immediately clean up local in-memory state so UI updates instantly
+      workspaceFolders = workspaceFolders.filter(f => {
+        const p = f.path || (f.parent ? `${f.parent}/${f.name}` : f.name);
+        return p !== folderPath && !p.startsWith(folderPath + '/');
+      });
+
+      if (dbData && dbData.items) {
+        dbData.items = dbData.items.filter(it => {
+          if (!it.folder) return true;
+          return it.folder !== folderPath && !it.folder.startsWith(folderPath + '/');
+        });
+      }
+
+      // If we were inside this folder or a child folder, navigate up
+      if (currentFolderPath === folderPath || currentFolderPath.startsWith(folderPath + '/')) {
+        currentFolderPath = folderPath.includes('/') ? folderPath.substring(0, folderPath.lastIndexOf('/')) : '';
+      }
+      if (window.Browse && typeof window.Browse.resetPathIfDeleted === 'function') {
+        window.Browse.resetPathIfDeleted(folderPath);
+      }
+
+      // 4. Invalidate unified browse & re-render
+      if (window.Browse && typeof window.Browse.invalidate === 'function') {
+        window.Browse.invalidate();
+      }
+      if (typeof fetchWorkspaceData === 'function') {
+        await fetchWorkspaceData({ silent: true });
+      } else {
+        await fetchAndRender();
+      }
+      if (typeof updateUI === 'function') {
+        updateUI();
+      }
+      if (typeof showToast === 'function') {
+        showToast(`Folder "${folderName}" deleted`);
+      }
     } catch (err) {
-      alert(err.message);
+      console.error('Error deleting folder:', err);
+      alert(err.message || 'Failed to delete folder');
     }
   }
 
   // ---------- File CRUD ----------
 
   async function deleteFile(file) {
-    if (!confirm(`Delete "${file.name}"? This cannot be undone.`)) return;
+    if (!file) return;
+    const fileName = file.name || file.fileName || file.title || 'file';
+    if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/files`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: file.path })
-      });
-      if (!res.ok) {
-        let errMsg = 'Failed to delete file';
+      let supabaseHandled = false;
+      const matchingItem = (dbData && dbData.items)
+        ? dbData.items.find(it => it.id === file.id || (file.path && it.filePath && (it.filePath.endsWith(file.path) || it.filePath.includes(file.path))))
+        : null;
+
+      if (matchingItem && window.SupabaseManager && window.SupabaseManager.isConfigured()) {
         try {
-          const err = await res.json();
-          errMsg = err.error || errMsg;
-        } catch {
-          errMsg = `Server returned ${res.status}: ${res.statusText}`;
+          await window.SupabaseManager.deleteItem(activeWorkspaceId, matchingItem.id);
+          supabaseHandled = true;
+        } catch (sbErr) {
+          console.warn('Supabase deleteItem error:', sbErr);
         }
-        throw new Error(errMsg);
       }
-      await fetchAndRender();
+
+      try {
+        const res = await fetch(`/api/workspaces/${activeWorkspaceId}/files`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: file.path })
+        });
+        if (!res.ok && !supabaseHandled) {
+          let errMsg = 'Failed to delete file';
+          try {
+            const err = await res.json();
+            errMsg = err.error || errMsg;
+          } catch {
+            errMsg = `Server returned ${res.status}: ${res.statusText}`;
+          }
+          throw new Error(errMsg);
+        }
+      } catch (localErr) {
+        if (!supabaseHandled) throw localErr;
+      }
+
+      if (matchingItem && dbData && dbData.items) {
+        dbData.items = dbData.items.filter(it => it.id !== matchingItem.id);
+      }
+      if (window.Browse && typeof window.Browse.invalidate === 'function') {
+        window.Browse.invalidate();
+      }
+      if (typeof fetchWorkspaceData === 'function') {
+        await fetchWorkspaceData({ silent: true });
+      } else {
+        await fetchAndRender();
+      }
+      if (typeof updateUI === 'function') {
+        updateUI();
+      }
+      if (typeof showToast === 'function') {
+        showToast(`"${fileName}" deleted`);
+      }
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Failed to delete file');
     }
   }
 
@@ -3157,34 +3252,73 @@ const FolderExplorer = (() => {
 
   async function doRename(newName) {
     if (!renameTarget || !newName.trim()) return;
+    const cleanNewName = newName.trim();
     try {
-      let res;
+      let supabaseRenamed = false;
       if (renameTarget.type === 'folder') {
-        res = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderPath: renameTarget.path, newName: newName.trim() })
-        });
-      } else {
-        res = await fetch(`/api/workspaces/${activeWorkspaceId}/files/rename`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filePath: renameTarget.path, newName: newName.trim() })
-        });
-      }
-      if (!res.ok) {
-        let errMsg = 'Rename failed';
-        try {
-          const err = await res.json();
-          errMsg = err.error || errMsg;
-        } catch {
-          errMsg = `Server returned ${res.status}: ${res.statusText}`;
+        if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+          try {
+            await window.SupabaseManager.renameFolder(activeWorkspaceId, renameTarget.path, cleanNewName);
+            supabaseRenamed = true;
+          } catch (sbErr) {
+            console.warn('Supabase renameFolder error:', sbErr);
+            if (currentUser && currentUser.provider === 'supabase') throw sbErr;
+          }
         }
-        throw new Error(errMsg);
+
+        try {
+          const res = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderPath: renameTarget.path, newName: cleanNewName })
+          });
+          if (!res.ok && !supabaseRenamed) {
+            let errMsg = 'Rename failed';
+            try {
+              const err = await res.json();
+              errMsg = err.error || errMsg;
+            } catch {
+              errMsg = `Server returned ${res.status}: ${res.statusText}`;
+            }
+            throw new Error(errMsg);
+          }
+        } catch (apiErr) {
+          if (!supabaseRenamed) throw apiErr;
+        }
+      } else {
+        const res = await fetch(`/api/workspaces/${activeWorkspaceId}/files/rename`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: renameTarget.path, newName: cleanNewName })
+        });
+        if (!res.ok) {
+          let errMsg = 'Rename failed';
+          try {
+            const err = await res.json();
+            errMsg = err.error || errMsg;
+          } catch {
+            errMsg = `Server returned ${res.status}: ${res.statusText}`;
+          }
+          throw new Error(errMsg);
+        }
       }
-      await fetchAndRender();
+
+      if (window.Browse && typeof window.Browse.invalidate === 'function') {
+        window.Browse.invalidate();
+      }
+      if (typeof fetchWorkspaceData === 'function') {
+        await fetchWorkspaceData({ silent: true });
+      } else {
+        await fetchAndRender();
+      }
+      if (typeof updateUI === 'function') {
+        updateUI();
+      }
+      if (typeof showToast === 'function') {
+        showToast('Renamed successfully');
+      }
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Rename failed');
     }
     renameTarget = null;
   }

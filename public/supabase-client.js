@@ -697,15 +697,30 @@ CREATE TRIGGER on_auth_user_created
     }
   }
 
-  async function deleteFolder(workspaceId, folderPath) {
+  async function deleteFolder(workspaceId, folderPath, folderId) {
     if (!client) return null;
     const user = await getUser();
     if (!user) throw new Error('User not logged in');
 
-    const parts = folderPath.split('/');
-    const name = parts.pop();
+    const cleanPath = String(folderPath || '').trim();
+    const parts = cleanPath.split('/').filter(Boolean);
+    const name = parts.pop() || cleanPath;
     const parent = parts.join('/');
 
+    // 1. Delete the folder itself by id if available
+    if (folderId) {
+      try {
+        await client
+          .from('folders')
+          .delete()
+          .eq('id', folderId)
+          .eq('user_id', user.id);
+      } catch (idErr) {
+        console.warn('Delete folder by id warning:', idErr);
+      }
+    }
+
+    // 2. Delete by workspace_id + parent + name
     const { error } = await client
       .from('folders')
       .delete()
@@ -714,7 +729,46 @@ CREATE TRIGGER on_auth_user_created
       .eq('name', name)
       .eq('parent', parent);
 
-    if (error) throw error;
+    if (error) console.warn('Delete folder row warning:', error);
+
+    // 3. Delete direct subfolders and nested subfolders
+    try {
+      await client
+        .from('folders')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .eq('parent', cleanPath);
+
+      await client
+        .from('folders')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .like('parent', `${cleanPath}/%`);
+    } catch (subErr) {
+      console.warn('Subfolders delete warning:', subErr);
+    }
+
+    // 4. Delete items in this folder and subfolders
+    try {
+      await client
+        .from('items')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .eq('folder', cleanPath);
+
+      await client
+        .from('items')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .like('folder', `${cleanPath}/%`);
+    } catch (itErr) {
+      console.warn('Folder items delete warning:', itErr);
+    }
+
     return true;
   }
 
@@ -723,10 +777,12 @@ CREATE TRIGGER on_auth_user_created
     const user = await getUser();
     if (!user) throw new Error('User not logged in');
 
+    const cleanPath = String(folderPath || '').trim();
     const cleanName = newName.trim().replace(/[<>:"/\\|?*]/g, '_');
-    const parts = folderPath.split('/');
-    const oldName = parts.pop();
+    const parts = cleanPath.split('/').filter(Boolean);
+    const oldName = parts.pop() || cleanPath;
     const parent = parts.join('/');
+    const newPath = parent ? `${parent}/${cleanName}` : cleanName;
 
     const { data, error } = await client
       .from('folders')
@@ -738,6 +794,40 @@ CREATE TRIGGER on_auth_user_created
       .select();
 
     if (error) throw error;
+
+    // Also update any direct subfolders
+    try {
+      const { data: directSubs } = await client
+        .from('folders')
+        .select('id, parent')
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .eq('parent', cleanPath);
+
+      if (directSubs && directSubs.length > 0) {
+        for (const sub of directSubs) {
+          await client
+            .from('folders')
+            .update({ parent: newPath })
+            .eq('id', sub.id);
+        }
+      }
+    } catch (subErr) {
+      console.warn('Rename subfolders warning:', subErr);
+    }
+
+    // Also update items where folder === cleanPath
+    try {
+      await client
+        .from('items')
+        .update({ folder: newPath })
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .eq('folder', cleanPath);
+    } catch (itErr) {
+      console.warn('Rename items folder warning:', itErr);
+    }
+
     return data && data[0];
   }
 
