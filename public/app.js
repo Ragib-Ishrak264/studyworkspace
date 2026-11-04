@@ -1095,6 +1095,22 @@ async function fetchWorkspaceData(opts = {}) {
           items: sbData.items || []
         };
         workspaceFolders = sbData.folders || [];
+        try {
+          const lfRes = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`);
+          if (lfRes.ok) {
+            const lfTree = await lfRes.json();
+            const existingNames = new Set(workspaceFolders.map(f => f.path || f.name));
+            (lfTree.folders || []).forEach(lf => {
+              if (!existingNames.has(lf.path || lf.name)) {
+                workspaceFolders.push(lf);
+                existingNames.add(lf.path || lf.name);
+              }
+            });
+            window.workspaceRootFiles = lfTree.files || [];
+          }
+        } catch (e) {
+          /* ignore */
+        }
         window.dbData = dbData;
         window.activeWorkspaceId = activeWorkspaceId;
 
@@ -1128,8 +1144,10 @@ async function fetchWorkspaceData(opts = {}) {
     if (foldersRes && foldersRes.ok) {
       const folderTree = await foldersRes.json();
       workspaceFolders = folderTree.folders || [];
+      window.workspaceRootFiles = folderTree.files || []; // untracked files at the workspace root (used by Browse)
     } else {
       workspaceFolders = [];
+      window.workspaceRootFiles = [];
     }
 
     populateCategoriesDropdowns();
@@ -1207,6 +1225,11 @@ function renderSidebarCategories() {
 
 // Render workspace cards
 function renderGridItems() {
+  // Unified folders + files view for the default "All Items" scope; filtered views keep the original rendering
+  if (window.Browse) {
+    if (window.Browse.handles()) { window.Browse.render(); return; }
+    window.Browse.hide();
+  }
   itemsGrid.innerHTML = '';
 
   // Filter items
@@ -1305,6 +1328,7 @@ function createFolderCardElement(folder) {
 
   // Direct click -> open folder in explorer
   el.addEventListener('click', () => {
+    if (window.Browse) { window.Browse.navigate(folder.path); return; }
     const filterFolders = document.getElementById('filter-folders');
     if (filterFolders) filterFolders.click();
     setTimeout(() => {
@@ -1594,6 +1618,7 @@ function setupContextMenuEvents() {
     hideContextMenu();
     if (!activeContextTarget) return;
     if (activeContextType === 'folder') {
+      if (window.Browse) { window.Browse.navigate(activeContextTarget.path); return; }
       const filterFolders = document.getElementById('filter-folders');
       if (filterFolders) filterFolders.click();
       setTimeout(() => FolderExplorer.navigateTo(activeContextTarget.path), 50);
@@ -2479,6 +2504,9 @@ const FolderExplorer = (() => {
     btnRoot: document.getElementById('btn-breadcrumb-root'),
     btnNewFolder: document.getElementById('btn-fe-new-folder'),
     btnUpload: document.getElementById('btn-fe-upload'),
+    btnUploadFolder: document.getElementById('btn-fe-upload-folder'),
+    btnUploadFolderEmpty: document.getElementById('btn-fe-upload-folder-empty'),
+    feFolderInput: document.getElementById('fe-folder-input'),
 
     // Contents
     fileList: document.getElementById('folder-file-list'),
@@ -2560,6 +2588,7 @@ const FolderExplorer = (() => {
 
       renderTree();
       navigateTo(currentFolderPath, false);
+      if (window.Browse) window.Browse.invalidate(); // keep the unified view in sync after any folder/file operation
     } catch (err) {
       console.error('FolderExplorer: fetch error', err);
     }
@@ -2979,33 +3008,76 @@ const FolderExplorer = (() => {
 
   // ---------- Folder CRUD ----------
 
-  function openCreateFolderModal() {
+  function openCreateFolderModal(parent) {
+    if (parent !== undefined) currentFolderPath = parent || '';
     const d = dom();
-    d.folderNameInput.value = '';
-    d.modalCreateFolder.classList.add('active');
-    setTimeout(() => d.folderNameInput.focus(), 100);
+    if (d.folderNameInput) d.folderNameInput.value = '';
+    const targetLabel = document.getElementById('create-folder-target-label');
+    if (targetLabel) {
+      targetLabel.textContent = currentFolderPath ? `Location: ${currentFolderPath}` : 'Location: Root';
+    }
+    if (d.modalCreateFolder) {
+      d.modalCreateFolder.classList.add('active');
+      setTimeout(() => d.folderNameInput && d.folderNameInput.focus(), 100);
+    }
   }
 
-  async function createFolder(name) {
-    try {
-      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentPath: currentFolderPath, name })
-      });
-      if (!res.ok) {
-        let errMsg = 'Failed to create folder';
-        try {
-          const err = await res.json();
-          errMsg = err.error || errMsg;
-        } catch {
-          errMsg = `Server returned ${res.status}: ${res.statusText}. Please restart the server.`;
-        }
-        throw new Error(errMsg);
+  async function createFolder(name, parent) {
+    const parentPath = parent !== undefined ? (parent || '') : (currentFolderPath || '');
+    const cleanName = String(name || '').trim().replace(/[<>:"/\\|?*]/g, '_');
+    if (!cleanName) return;
+
+    // Optimistically register in workspaceFolders so it appears immediately!
+    const newFolderObj = {
+      name: cleanName,
+      path: parentPath ? `${parentPath}/${cleanName}` : cleanName,
+      parent: parentPath || ''
+    };
+    if (Array.isArray(workspaceFolders)) {
+      if (!workspaceFolders.some(f => (f.path || f.name) === newFolderObj.path)) {
+        workspaceFolders.push(newFolderObj);
       }
-      await fetchAndRender();
+    }
+    if (window.Browse && typeof window.Browse.render === 'function') {
+      window.Browse.render();
+    }
+
+    try {
+      // 1. Supabase Cloud: save to 'folders' table if configured
+      if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+        try {
+          await window.SupabaseManager.createFolder(activeWorkspaceId, cleanName, parentPath);
+        } catch (sbErr) {
+          console.warn('Supabase createFolder warn:', sbErr);
+        }
+      }
+
+      // 2. Local disk backend
+      try {
+        await fetch(`/api/workspaces/${activeWorkspaceId}/folders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentPath, name: cleanName })
+        });
+      } catch (localErr) {
+        console.warn('Local createFolder warn:', localErr);
+      }
+
+      // 3. Immediately refresh workspace data & unified browser
+      if (typeof fetchWorkspaceData === 'function') {
+        await fetchWorkspaceData({ silent: true });
+      }
+      if (window.Browse && typeof window.Browse.invalidate === 'function') {
+        window.Browse.invalidate();
+      }
+      if (typeof fetchAndRender === 'function') {
+        await fetchAndRender();
+      }
+      if (typeof showToast === 'function') {
+        showToast(`Folder "${cleanName}" created!`);
+      }
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Failed to create folder');
     }
   }
 
@@ -3255,6 +3327,176 @@ const FolderExplorer = (() => {
     }, 600);
   }
 
+  // ---------- Upload a whole folder (keeps subfolder structure) ----------
+
+  const JUNK_FILES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini']);
+  const FOLDER_BATCH_MAX_FILES = 20;
+  const FOLDER_BATCH_MAX_BYTES = 40 * 1024 * 1024;
+
+  function notify(msg, type) {
+    if (typeof window.showToast === 'function') window.showToast(msg, type || 'info');
+    else alert(msg);
+  }
+
+  // Recursively read dropped FileSystemEntry items into [{ file, rel }]
+  async function readDroppedEntries(entries) {
+    const out = [];
+    async function walk(entry, prefix) {
+      if (entry.isFile) {
+        const file = await new Promise((res, rej) => entry.file(res, rej));
+        out.push({ file, rel: prefix + entry.name });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let batch;
+        do {
+          batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+          for (const child of batch) await walk(child, prefix + entry.name + '/');
+        } while (batch.length);
+      }
+    }
+    for (const e of entries) await walk(e, '');
+    return out;
+  }
+
+  function postBatch(url, files, onProgress) {
+    return new Promise((resolve) => {
+      const fd = new FormData();
+      files.forEach(f => fd.append('files', f));
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded, e.total); };
+      xhr.onload = () => resolve({ ok: xhr.status === 201, text: xhr.responseText });
+      xhr.onerror = () => resolve({ ok: false, text: 'Network error' });
+      xhr.send(fd);
+    });
+  }
+
+  // items: [{ file: File, rel: 'Folder/sub/name.pdf' }]
+  async function uploadFolderItems(items) {
+    const d = dom();
+    const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '_').trim();
+    const groups = new Map(); // target folder path -> File[]
+    let skipped = 0;
+    for (const { file, rel } of items) {
+      if (JUNK_FILES.has(file.name.toLowerCase())) { skipped++; continue; }
+      const parts = rel.split('/').filter(p => p && p !== '.' && p !== '..').map(clean).filter(Boolean);
+      const target = [currentFolderPath, ...parts.slice(0, -1)].filter(Boolean).join('/');
+      if (!groups.has(target)) groups.set(target, []);
+      groups.get(target).push(file);
+    }
+    const totalFiles = [...groups.values()].reduce((a, g) => a + g.length, 0);
+    if (!totalFiles) { notify('That folder has no files to upload.', 'error'); return; }
+    const totalBytes = [...groups.values()].flat().reduce((a, f) => a + f.size, 0);
+
+    // Build batches (never mixing destination folders)
+    const batches = [];
+    for (const [target, files] of groups) {
+      let cur = [], bytes = 0;
+      for (const f of files) {
+        if (cur.length && (cur.length >= FOLDER_BATCH_MAX_FILES || bytes + f.size > FOLDER_BATCH_MAX_BYTES)) {
+          batches.push({ target, files: cur }); cur = []; bytes = 0;
+        }
+        cur.push(f); bytes += f.size;
+      }
+      if (cur.length) batches.push({ target, files: cur });
+    }
+
+    const rootName = (items[0].rel.split('/')[0]) || 'folder';
+    openUploadModal();
+    d.feFileDropzone.style.display = 'none';
+    d.feSelectedInfo.style.display = 'none';
+    d.feUploadProgress.style.display = 'block';
+    d.btnFeSubmitUpload.disabled = true;
+
+    let doneBytes = 0, doneFiles = 0, failed = 0;
+
+    if (window.SupabaseManager && window.SupabaseManager.isConfigured()) {
+      // 1. Ensure all folder levels exist in Supabase
+      const allFoldersMap = new Map();
+      for (const target of groups.keys()) {
+        if (!target) continue;
+        const parts = target.split('/').filter(Boolean);
+        let curr = '';
+        for (const p of parts) {
+          const parent = curr;
+          curr = curr ? `${curr}/${p}` : p;
+          if (!allFoldersMap.has(curr)) {
+            allFoldersMap.set(curr, { name: p, parent });
+          }
+        }
+      }
+
+      for (const [fPath, fObj] of allFoldersMap) {
+        try {
+          await window.SupabaseManager.createFolder(activeWorkspaceId, fObj.name, fObj.parent);
+        } catch (e) {
+          console.warn('Folder creation warning in Supabase:', e);
+        }
+      }
+
+      // 2. Upload files to Supabase Storage & insert items
+      for (const [target, files] of groups) {
+        for (const file of files) {
+          try {
+            d.feProgressText.textContent = `Uploading "${file.name}"... (${doneFiles + 1}/${totalFiles})`;
+            const { item } = await window.SupabaseManager.uploadFile(activeWorkspaceId, file, target);
+            if (item && dbData && Array.isArray(dbData.items)) {
+              dbData.items.unshift(item);
+            }
+            doneFiles++;
+          } catch (err) {
+            console.error(`Failed to upload ${file.name} to Supabase:`, err);
+            failed++;
+          }
+          doneBytes += file.size;
+          const pct = totalBytes ? Math.round((doneBytes / totalBytes) * 100) : 100;
+          d.feProgressFill.style.width = pct + '%';
+        }
+      }
+
+      // Also fire background upload to local server so disk is also populated
+      batches.forEach(b => {
+        const url = `/api/workspaces/${activeWorkspaceId}/upload-to-folder?folder=${encodeURIComponent(b.target)}`;
+        postBatch(url, b.files, () => {}).catch(() => {});
+      });
+    } else {
+      // Local Server mode
+      for (const b of batches) {
+        const batchBytes = b.files.reduce((a, f) => a + f.size, 0);
+        const url = `/api/workspaces/${activeWorkspaceId}/upload-to-folder?folder=${encodeURIComponent(b.target)}`;
+        const res = await postBatch(url, b.files, (loaded, total) => {
+          const frac = total ? Math.min(1, loaded / total) : 0;
+          const pct = totalBytes ? Math.round(((doneBytes + batchBytes * frac) / totalBytes) * 100) : 0;
+          d.feProgressFill.style.width = pct + '%';
+          d.feProgressText.textContent = `Uploading "${rootName}"... ${pct}% (${doneFiles}/${totalFiles} files)`;
+        });
+        if (res.ok) doneFiles += b.files.length; else failed += b.files.length;
+        doneBytes += batchBytes;
+      }
+    }
+
+    d.feProgressFill.style.width = '100%';
+    d.feProgressText.textContent = failed
+      ? `Finished: ${doneFiles} uploaded, ${failed} failed.`
+      : `Done! ${doneFiles} file(s) uploaded from "${rootName}".`;
+    if (failed) notify(`${failed} file(s) could not be uploaded. The rest of the folder was added.`, 'error');
+    else notify(`Folder "${rootName}" uploaded (${doneFiles} files).`, 'success');
+
+    setTimeout(async () => {
+      d.modalFolderUpload.classList.remove('active');
+      d.btnFeSubmitUpload.disabled = false;
+      await fetchAndRender();
+      if (typeof fetchWorkspaceData === 'function') await fetchWorkspaceData();
+      if (window.Browse) window.Browse.invalidate();
+    }, 900);
+  }
+
+  function pickFolderToUpload() {
+    const d = dom();
+    d.feFolderInput.value = '';
+    d.feFolderInput.click();
+  }
+
   // ---------- Event wiring ----------
 
   function setupEvents() {
@@ -3298,6 +3540,16 @@ const FolderExplorer = (() => {
     // Upload button (empty state)
     d.btnUploadEmpty.addEventListener('click', () => openUploadModal());
 
+    // Upload whole folder (toolbar + empty state)
+    if (d.btnUploadFolder) d.btnUploadFolder.addEventListener('click', pickFolderToUpload);
+    if (d.btnUploadFolderEmpty) d.btnUploadFolderEmpty.addEventListener('click', pickFolderToUpload);
+    if (d.feFolderInput) d.feFolderInput.addEventListener('change', () => {
+      const files = Array.from(d.feFolderInput.files || []);
+      d.feFolderInput.value = '';
+      if (!files.length) return; // cancelled or empty folder
+      uploadFolderItems(files.map(f => ({ file: f, rel: f.webkitRelativePath || f.name })));
+    });
+
     // --- Create Folder modal ---
     d.btnCloseFolderModal.addEventListener('click', () => d.modalCreateFolder.classList.remove('active'));
     d.modalCreateFolder.addEventListener('click', (e) => {
@@ -3338,6 +3590,23 @@ const FolderExplorer = (() => {
       });
     });
     d.feFileDropzone.addEventListener('drop', (e) => {
+      // Folder drop: entries must be grabbed synchronously during the event
+      const dtItems = e.dataTransfer.items;
+      if (dtItems && dtItems.length && typeof dtItems[0].webkitGetAsEntry === 'function') {
+        const entries = [];
+        let hasDir = false;
+        for (const it of dtItems) {
+          if (it.kind !== 'file') continue;
+          const en = it.webkitGetAsEntry();
+          if (en) { entries.push(en); if (en.isDirectory) hasDir = true; }
+        }
+        if (hasDir) {
+          readDroppedEntries(entries)
+            .then(uploadFolderItems)
+            .catch(err => notify('Could not read the dropped folder: ' + (err && err.message || err), 'error'));
+          return;
+        }
+      }
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         d.feFileInput.files = files;
@@ -3409,8 +3678,23 @@ const FolderExplorer = (() => {
     deleteFile,
     openRenameFile,
     openMoveFileModal,
+    // Used by the unified Browse view: upload into whichever folder is open there
+    uploadHere(path, kind) {
+      currentFolderPath = path || '';
+      if (kind === 'folder') pickFolderToUpload(); else openUploadModal();
+    },
+    createFolderHere(path) {
+      openCreateFolderModal(path || '');
+    },
+    createFolder,
+    openCreateFolderModal
   };
 })();
+
+// Explicitly export to window so other scripts (like browse.js) can invoke them directly
+window.FolderExplorer = FolderExplorer;
+window.openCreateFolderModal = (path) => FolderExplorer.createFolderHere(path);
+window.createFolder = (name, parent) => FolderExplorer.createFolder(name, parent);
 
 // ================================================================
 // Hook Folder Explorer into the sidebar filter system
@@ -3425,7 +3709,13 @@ const FolderExplorer = (() => {
     if (!filterFolders) return;
 
     filterFolders.addEventListener('click', () => {
-      // Deactivate other type filters
+      // Folders now live in the unified view (sidebar tree + main area): go to All Items at the workspace root
+      if (window.Browse) {
+        filterAll.click();
+        window.Browse.navigate('');
+        return;
+      }
+      // Legacy fallback (Browse not loaded)
       [filterAll, filterLinks, filterFiles, filterNotes].forEach(el => el.classList.remove('active'));
       filterFolders.classList.add('active');
 

@@ -630,6 +630,17 @@
       for (const item of items) {
         if (item.type === 'text') continue;
 
+        if (item.type === 'texthl') {
+          ctx.save();
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = item.color || '#facc15';
+          for (const r of (item.rects || [])) {
+            ctx.fillRect(r.x * canvas.width, r.y * canvas.height, r.w * canvas.width, r.h * canvas.height);
+          }
+          ctx.restore();
+          continue;
+        }
+
         ctx.save();
         ctx.strokeStyle = item.color || '#f43f5e';
         ctx.lineCap = 'round';
@@ -1411,6 +1422,7 @@
           <div class="dv-page-canvas-wrapper" style="width:${width}px; height:${height}px;">
             <canvas id="dv-pdf-canvas-${i}"></canvas>
             <canvas class="dv-annotation-canvas" id="dv-annotation-canvas-${i}" data-page="${i}"></canvas>
+            <div class="dv-text-layer textLayer" id="dv-text-layer-${i}" data-page="${i}"></div>
             <div class="dv-text-annotations-layer" id="dv-text-annotations-${i}" data-page="${i}"></div>
             <div class="dv-page-skeleton" id="dv-page-skeleton-${i}">
               <div class="dv-spinner-sm"></div>
@@ -1507,12 +1519,37 @@
         }
 
         if (skeleton) skeleton.style.display = 'none';
+
+        // Selectable text layer (copy / translate / highlight)
+        this.renderTextLayerFor(page, pageNum, viewport);
       } catch (err) {
         if (err && err.name !== 'RenderingCancelledException') {
           console.warn(`[DocViewer] Page ${pageNum} render error:`, err);
         }
       } finally {
         this.renderingPages.delete(pageNum);
+      }
+    },
+
+    async renderTextLayerFor(page, pageNum, viewport) {
+      const layer = document.getElementById(`dv-text-layer-${pageNum}`);
+      if (!layer || !window.pdfjsLib || !window.pdfjsLib.renderTextLayer) return;
+      layer.innerHTML = '';
+      layer.style.width = `${Math.floor(viewport.width)}px`;
+      layer.style.height = `${Math.floor(viewport.height)}px`;
+      layer.style.setProperty('--scale-factor', viewport.scale);
+      try {
+        const textContent = await page.getTextContent();
+        const task = window.pdfjsLib.renderTextLayer({
+          textContentSource: textContent,
+          textContent,
+          container: layer,
+          viewport,
+          textDivs: []
+        });
+        if (task && task.promise) await task.promise;
+      } catch (err) {
+        console.warn(`[DocViewer] Text layer error on page ${pageNum}:`, err);
       }
     },
 
@@ -2313,6 +2350,245 @@
         .replace(/'/g, '&#39;');
     }
   };
+
+  // =========================================================================
+  // Text Selection Tools: Copy / Translate / Highlight (and remove highlight)
+  // =========================================================================
+  const TextSelectionTools = {
+    popup: null,
+    current: null, // { text, rects: [{page, x,y,w,h}], hlItems: [{page,id}] }
+    colors: ['#facc15', '#4ade80', '#38bdf8', '#f472b6'],
+    LANGS: [['en', 'English'], ['bn', 'Bengali'], ['hi', 'Hindi'], ['ar', 'Arabic'], ['es', 'Spanish'],
+            ['fr', 'French'], ['de', 'German'], ['zh-CN', 'Chinese'], ['ja', 'Japanese'], ['ru', 'Russian']],
+
+    init() {
+      this.buildPopup();
+      document.addEventListener('mouseup', (e) => this.onPointerUp(e));
+      document.addEventListener('touchend', (e) => this.onPointerUp(e));
+      document.addEventListener('mousedown', (e) => {
+        if (this.popup && !this.popup.contains(e.target)) this.hide();
+      });
+      document.addEventListener('scroll', () => this.hide(), true);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.hide(); });
+    },
+
+    buildPopup() {
+      const p = document.createElement('div');
+      p.className = 'dv-sel-popup';
+      p.style.display = 'none';
+      p.innerHTML = `
+        <div class="dv-sel-row">
+          <button type="button" data-act="copy" title="Copy">Copy</button>
+          <button type="button" data-act="translate" title="Translate">Translate</button>
+          <span class="dv-sel-colors">${this.colors.map(c =>
+            `<button type="button" class="dv-sel-color" data-act="highlight" data-color="${c}" title="Highlight" style="background:${c}"></button>`).join('')}</span>
+          <button type="button" data-act="unhighlight" title="Remove highlight" style="display:none">Remove highlight</button>
+        </div>
+        <div class="dv-sel-translation" style="display:none">
+          <select class="dv-sel-lang">${this.LANGS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>
+          <div class="dv-sel-result"></div>
+        </div>`;
+      document.body.appendChild(p);
+      this.popup = p;
+
+      const sel = p.querySelector('.dv-sel-lang');
+      sel.value = localStorage.getItem('workspace_translate_lang') || 'en';
+      sel.addEventListener('change', () => {
+        localStorage.setItem('workspace_translate_lang', sel.value);
+        this.translate();
+      });
+      p.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'SELECT') e.preventDefault(); });
+      p.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        const act = btn.dataset.act;
+        if (act === 'copy') this.copy();
+        else if (act === 'translate') this.translate();
+        else if (act === 'highlight') this.highlight(btn.dataset.color);
+        else if (act === 'unhighlight') this.unhighlight();
+      });
+    },
+
+    pageOf(el) {
+      const layer = el && el.closest ? el.closest('.dv-text-layer') : null;
+      return layer ? parseInt(layer.dataset.page, 10) : null;
+    },
+
+    onPointerUp(e) {
+      if (this.popup && this.popup.contains(e.target)) return;
+      setTimeout(() => {
+        const sel = window.getSelection();
+        const inLayer = e.target && e.target.closest && e.target.closest('.dv-text-layer');
+        if (sel && !sel.isCollapsed && sel.rangeCount) {
+          const range = sel.getRangeAt(0);
+          const node = range.commonAncestorContainer;
+          const el = node.nodeType === 1 ? node : node.parentElement;
+          if (el && (el.closest('.dv-text-layer') || el.querySelector && el.querySelector('.dv-text-layer'))) {
+            this.showForSelection(range, sel);
+            return;
+          }
+        }
+        if (inLayer) this.showForClick(e);
+      }, 10);
+    },
+
+    collectRects(range) {
+      const out = [];
+      const wrappers = document.querySelectorAll('.dv-page-canvas-wrapper');
+      for (const r of range.getClientRects()) {
+        if (r.width < 1 || r.height < 1) continue;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        for (const w of wrappers) {
+          const wr = w.getBoundingClientRect();
+          if (cx >= wr.left && cx <= wr.right && cy >= wr.top && cy <= wr.bottom) {
+            const layer = w.querySelector('.dv-text-layer');
+            out.push({
+              page: parseInt(layer.dataset.page, 10),
+              x: (r.left - wr.left) / wr.width, y: (r.top - wr.top) / wr.height,
+              w: r.width / wr.width, h: r.height / wr.height
+            });
+            break;
+          }
+        }
+      }
+      return out;
+    },
+
+    showForSelection(range, sel) {
+      const text = sel.toString().replace(/\s+/g, ' ').trim();
+      if (!text) return;
+      this.current = { text, rects: this.collectRects(range), hlItems: [] };
+      const box = range.getBoundingClientRect();
+      this.open(box.left + box.width / 2, box.top, box.bottom, false);
+    },
+
+    showForClick(e) {
+      // Click on an existing highlight -> offer removal
+      const layer = e.target.closest('.dv-text-layer');
+      const page = this.pageOf(layer);
+      if (!page) return;
+      const wr = layer.getBoundingClientRect();
+      const px = (e.clientX - wr.left) / wr.width, py = (e.clientY - wr.top) / wr.height;
+      const hits = AnnotationManager.getPageItems(page).filter(it => it.type === 'texthl' &&
+        (it.rects || []).some(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h));
+      if (!hits.length) return;
+      this.current = { text: '', rects: [], hlItems: hits.map(h => ({ page, id: h.id })) };
+      this.open(e.clientX, e.clientY - 10, e.clientY + 10, true);
+    },
+
+    open(cx, top, bottom, onlyRemove) {
+      const p = this.popup;
+      p.querySelector('.dv-sel-translation').style.display = 'none';
+      p.querySelector('[data-act="copy"]').style.display = onlyRemove ? 'none' : '';
+      p.querySelector('[data-act="translate"]').style.display = onlyRemove ? 'none' : '';
+      p.querySelector('.dv-sel-colors').style.display = onlyRemove ? 'none' : '';
+
+      // Does the selection overlap existing highlights? Then offer removal as well
+      let overlapping = onlyRemove;
+      if (!onlyRemove) {
+        const ids = [];
+        for (const r of this.current.rects) {
+          for (const it of AnnotationManager.getPageItems(r.page)) {
+            if (it.type !== 'texthl' || ids.some(i => i.id === it.id)) continue;
+            if ((it.rects || []).some(h => r.x < h.x + h.w && r.x + r.w > h.x && r.y < h.y + h.h && r.y + r.h > h.y)) {
+              ids.push({ page: r.page, id: it.id });
+            }
+          }
+        }
+        this.current.hlItems = ids;
+        overlapping = ids.length > 0;
+      }
+      p.querySelector('[data-act="unhighlight"]').style.display = overlapping ? '' : 'none';
+
+      p.style.display = 'block';
+      const pw = p.offsetWidth, ph = p.offsetHeight;
+      let left = Math.max(8, Math.min(window.innerWidth - pw - 8, cx - pw / 2));
+      let y = top - ph - 8;
+      if (y < 8) y = bottom + 8;
+      p.style.left = `${left}px`;
+      p.style.top = `${y}px`;
+    },
+
+    hide() {
+      if (this.popup) this.popup.style.display = 'none';
+    },
+
+    async copy() {
+      const text = this.current && this.current.text;
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {
+        document.execCommand('copy');
+      }
+      WorkspaceViewer.showToast('Copied to clipboard', 'info');
+      this.hide();
+    },
+
+    async translate() {
+      const text = this.current && this.current.text;
+      if (!text) return;
+      const box = this.popup.querySelector('.dv-sel-translation');
+      const out = box.querySelector('.dv-sel-result');
+      const lang = box.querySelector('.dv-sel-lang').value;
+      box.style.display = 'block';
+      out.textContent = 'Translating...';
+      try {
+        const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl=' +
+          encodeURIComponent(lang) + '&q=' + encodeURIComponent(text.slice(0, 4000));
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        out.textContent = (data[0] || []).map(s => s[0]).join('') || '(no translation)';
+      } catch (err) {
+        out.textContent = 'Translation failed. Check your internet connection.';
+      }
+    },
+
+    highlight(color) {
+      const cur = this.current;
+      if (!cur || !cur.rects.length) return;
+      const byPage = {};
+      cur.rects.forEach(r => { (byPage[r.page] = byPage[r.page] || []).push({ x: r.x, y: r.y, w: r.w, h: r.h }); });
+      for (const page of Object.keys(byPage)) {
+        AnnotationManager.pushHistoryState(page);
+        AnnotationManager.getPageItems(page).push({
+          id: 'hl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          type: 'texthl', color, rects: byPage[page], text: cur.text
+        });
+        AnnotationManager.redrawPage(page);
+      }
+      AnnotationManager.saveAllAnnotations(WorkspaceViewer.activeFile);
+      window.getSelection().removeAllRanges();
+      this.hide();
+    },
+
+    unhighlight() {
+      const cur = this.current;
+      if (!cur) return;
+      const pages = new Set();
+      cur.hlItems.forEach(h => {
+        const items = AnnotationManager.getPageItems(h.page);
+        const idx = items.findIndex(it => it.id === h.id);
+        if (idx !== -1) {
+          if (!pages.has(h.page)) AnnotationManager.pushHistoryState(h.page);
+          items.splice(idx, 1);
+          pages.add(h.page);
+        }
+      });
+      pages.forEach(p => AnnotationManager.redrawPage(p));
+      AnnotationManager.saveAllAnnotations(WorkspaceViewer.activeFile);
+      window.getSelection().removeAllRanges();
+      WorkspaceViewer.showToast('Highlight removed', 'info');
+      this.hide();
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => TextSelectionTools.init());
+  } else {
+    TextSelectionTools.init();
+  }
 
   // Expose WorkspaceViewer globally
   window.WorkspaceViewer = WorkspaceViewer;

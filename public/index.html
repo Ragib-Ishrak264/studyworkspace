@@ -14,6 +14,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="dock.css?v=1.2.0">
+  <link rel="stylesheet" href="browse.css?v=1.2.3">
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,7 +27,7 @@
   <!-- Google Identity Services (OAuth 2.0 / Sign In with Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=2.7.0">
+  <link rel="stylesheet" href="style.css?v=2.7.1">
 </head>
 <body>
   <!-- ========================================================== -->
@@ -430,8 +432,8 @@
             </li>
           </ul>
         </div>
-        
-        <div class="nav-section">
+
+        <div class="nav-section" id="categories-section" style="display: none;">
           <div class="section-title-with-btn">
             <h3>Categories</h3>
             <button id="btn-add-category" title="Add Category" aria-label="Add Category">
@@ -570,10 +572,44 @@
         </button>
       </div>
 
+      <!-- Breadcrumb + Navigation + Actions (unified folders + files view) -->
+      <div class="br-bar" id="br-bar" hidden>
+        <div class="br-nav-group">
+          <button type="button" class="btn btn-icon br-nav-btn" id="br-nav-back" title="Go back (Alt+Left)" aria-label="Go back" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <button type="button" class="btn btn-icon br-nav-btn" id="br-nav-forward" title="Go forward (Alt+Right)" aria-label="Go forward" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <button type="button" class="btn btn-icon br-nav-btn" id="br-nav-up" title="Up to parent folder" aria-label="Up to parent folder" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+          </button>
+          <nav class="br-crumbs" id="br-crumbs" aria-label="Folder path"></nav>
+        </div>
+        <div class="br-actions">
+          <button type="button" class="btn btn-secondary br-upload" id="br-create-folder" title="Create a new folder in this location">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg><span>Add Folder</span>
+          </button>
+          <button type="button" class="btn btn-primary br-upload" id="br-upload-files" title="Upload files into this location">
+            <i data-lucide="upload-cloud"></i><span>Upload Files</span>
+          </button>
+          <button type="button" class="btn btn-secondary br-upload" id="br-upload-folder" title="Upload a whole folder (keeps its subfolders)">
+            <i data-lucide="folder-up"></i><span>Upload Folder</span>
+          </button>
+          <div class="br-toggle" role="group" aria-label="View mode">
+            <button type="button" data-view="grid" aria-pressed="true" title="Grid view"><i data-lucide="layout-grid"></i><span>Grid</span></button>
+            <button type="button" data-view="list" aria-pressed="false" title="List view"><i data-lucide="list"></i><span>List</span></button>
+          </div>
+        </div>
+      </div>
+
       <!-- Items Grid -->
       <section class="items-grid" id="items-grid">
         <!-- Dynamically populated cards -->
       </section>
+
+      <!-- List view (table) -->
+      <section class="br-list" id="br-list" aria-label="Files and folders" hidden></section>
 
       <!-- ============================================================ -->
       <!-- Folder Explorer Panel (shown when "Folders" filter is active) -->
@@ -598,6 +634,11 @@
               <i data-lucide="upload-cloud"></i>
               <span>Upload Here</span>
             </button>
+            <button class="fe-btn fe-btn-accent" id="btn-fe-upload-folder" title="Upload a whole folder (keeps its subfolders)">
+              <i data-lucide="folder-up"></i>
+              <span>Upload Folder</span>
+            </button>
+            <input type="file" id="fe-folder-input" webkitdirectory directory multiple style="display:none;" aria-hidden="true" tabindex="-1">
           </div>
         </div>
 
@@ -625,6 +666,9 @@
               <p>This folder is empty.</p>
               <button class="fe-btn fe-btn-accent" id="btn-fe-upload-empty">
                 <i data-lucide="upload-cloud"></i> Upload Files
+              </button>
+              <button class="fe-btn fe-btn-accent" id="btn-fe-upload-folder-empty">
+                <i data-lucide="folder-up"></i> Upload Folder
               </button>
             </div>
             <!-- File list -->
@@ -810,6 +854,10 @@
       </div>
       <div class="modal-body">
         <form id="form-create-folder">
+          <div id="create-folder-target-badge" style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:6px;margin-bottom:14px;font-size:0.84rem;color:#c7d2fe;">
+            <i data-lucide="folder" style="width:14px;height:14px;flex:none;color:#fcd38a;"></i>
+            <span id="create-folder-target-label">Location: Root</span>
+          </div>
           <div class="form-group">
             <label for="folder-name-input">Folder Name *</label>
             <input type="text" id="folder-name-input" required placeholder="e.g. Physics Notes, Semester 1">
@@ -844,7 +892,7 @@
             <label>Files *</label>
             <div class="file-dropzone" id="fe-file-dropzone">
               <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-              <p>Drag &amp; drop files, or <span class="browse-text">browse</span></p>
+              <p>Drag &amp; drop files <strong>or a whole folder</strong>, or <span class="browse-text">browse</span></p>
               <input type="file" id="fe-file-input" multiple style="display:none;">
             </div>
             <div class="selected-file-indicator" id="fe-selected-info" style="display:none;">
@@ -1646,12 +1694,15 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Supabase Client & Cloud Manager -->
-  <script src="supabase-client.js?v=2.5.3"></script>
+  <script src="supabase-client.js?v=2.7.0"></script>
   <!-- PDF.js Engine (Offline bundled) -->
   <script src="vendor/pdfjs/pdf.min.js"></script>
   <!-- Dedicated PDF & File Viewer Engine -->
-  <script src="viewer.js?v=2.7.0"></script>
+  <script src="viewer.js?v=2.8.0"></script>
+  <!-- Floating file explorer dock (bottom-right) -->
+  <script src="dock.js?v=1.2.0"></script>
   <!-- Client JavaScript -->
-  <script src="app.js?v=2.6.0"></script>
+  <script src="app.js?v=2.8.1"></script>
+  <script src="browse.js?v=1.4.1"></script>
 </body>
 </html>

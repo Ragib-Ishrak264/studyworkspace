@@ -1,10 +1,14 @@
-const CACHE_NAME = 'workspace-v2.7.0';
+const CACHE_NAME = 'workspace-v2.9.4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
   '/viewer.js',
+  '/dock.js',
+  '/dock.css',
+  '/browse.js',
+  '/browse.css',
   '/vendor/pdfjs/pdf.min.js',
   '/vendor/pdfjs/pdf.worker.min.js',
   '/lucide.min.js',

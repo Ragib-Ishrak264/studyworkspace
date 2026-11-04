@@ -358,7 +358,7 @@ select option:checked {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 40px;
+  padding: 20px 32px 32px;
   overflow-y: auto;
 }
 
@@ -368,7 +368,7 @@ select option:checked {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 .page-title {
@@ -5479,4 +5479,95 @@ select option:checked {
 .dv-text-note-drag i {
   width: 12px;
   height: 12px;
+}
+
+/* PDF selectable text layer */
+.dv-text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  line-height: 1;
+  z-index: 6;
+  opacity: 1;
+  text-size-adjust: none;
+}
+.dv-text-layer span,
+.dv-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.dv-text-layer ::selection {
+  background: rgba(56, 189, 248, 0.35);
+}
+.dv-annotating-mode:not([data-active-tool="select"]) .dv-text-layer {
+  pointer-events: none;
+}
+
+/* Selection popup */
+.dv-sel-popup {
+  position: fixed;
+  z-index: 2147483000;
+  max-width: 340px;
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  font-size: 0.82rem;
+}
+.dv-sel-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dv-sel-popup button {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+.dv-sel-popup button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.dv-sel-colors {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.dv-sel-popup .dv-sel-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+.dv-sel-translation {
+  margin-top: 6px;
+  padding: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.dv-sel-lang {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 3px 6px;
+  margin-bottom: 6px;
+}
+.dv-sel-result {
+  max-height: 180px;
+  overflow: auto;
+  line-height: 1.45;
+  user-select: text;
+  white-space: pre-wrap;
 }

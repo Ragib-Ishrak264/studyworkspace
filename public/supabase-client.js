@@ -653,6 +653,94 @@ CREATE TRIGGER on_auth_user_created
     return true;
   }
 
+  async function createFolder(workspaceId, name, parent = '') {
+    if (!client) return null;
+    const user = await getUser();
+    if (!user) throw new Error('User not logged in');
+
+    const cleanName = name.trim().replace(/[<>:"/\\|?*]/g, '_');
+    const row = {
+      user_id: user.id,
+      workspace_id: workspaceId,
+      name: cleanName,
+      parent: parent || ''
+    };
+
+    try {
+      const { data, error } = await client
+        .from('folders')
+        .upsert(row, { onConflict: 'user_id,workspace_id,parent,name' })
+        .select();
+
+      if (error) throw error;
+      return data && data[0];
+    } catch (upsertErr) {
+      // Fallback: check if existing first
+      const { data: existing } = await client
+        .from('folders')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .eq('name', cleanName)
+        .eq('parent', parent || '')
+        .maybeSingle();
+
+      if (existing) return existing;
+
+      const { data, error } = await client
+        .from('folders')
+        .insert([row])
+        .select();
+
+      if (error) throw error;
+      return data && data[0];
+    }
+  }
+
+  async function deleteFolder(workspaceId, folderPath) {
+    if (!client) return null;
+    const user = await getUser();
+    if (!user) throw new Error('User not logged in');
+
+    const parts = folderPath.split('/');
+    const name = parts.pop();
+    const parent = parts.join('/');
+
+    const { error } = await client
+      .from('folders')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
+      .eq('name', name)
+      .eq('parent', parent);
+
+    if (error) throw error;
+    return true;
+  }
+
+  async function renameFolder(workspaceId, folderPath, newName) {
+    if (!client) return null;
+    const user = await getUser();
+    if (!user) throw new Error('User not logged in');
+
+    const cleanName = newName.trim().replace(/[<>:"/\\|?*]/g, '_');
+    const parts = folderPath.split('/');
+    const oldName = parts.pop();
+    const parent = parts.join('/');
+
+    const { data, error } = await client
+      .from('folders')
+      .update({ name: cleanName })
+      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
+      .eq('name', oldName)
+      .eq('parent', parent)
+      .select();
+
+    if (error) throw error;
+    return data && data[0];
+  }
+
   // Upload file to Supabase Storage
   async function uploadFile(workspaceId, file, folder = '') {
     if (!client) throw new Error('Supabase is not configured');
@@ -969,6 +1057,9 @@ CREATE TRIGGER on_auth_user_created
     deleteItem,
     addCategory,
     deleteCategory,
+    createFolder,
+    deleteFolder,
+    renameFolder,
     uploadFile,
     subscribeRealtime,
     migrateLocalData

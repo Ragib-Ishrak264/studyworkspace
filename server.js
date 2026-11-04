@@ -1156,6 +1156,33 @@ app.post('/api/workspaces/:workspaceId/upload-to-folder', (req, res) => {
       size: f.size,
       path: path.relative(p.base, f.path).replace(/\\/g, '/')
     }));
+
+    try {
+      const db = readWorkspaceDB(workspaceId);
+      let changed = false;
+      uploaded.forEach(f => {
+        const filePath = `/uploads/${workspaceId}/${f.path}`;
+        const existing = db.items.find(it => it.filePath === filePath);
+        if (!existing) {
+          db.items.push({
+            id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            type: 'file',
+            title: f.name,
+            fileName: f.name,
+            fileSize: f.size,
+            filePath,
+            folder: folderRel || '',
+            category: 'General',
+            createdAt: new Date().toISOString()
+          });
+          changed = true;
+        }
+      });
+      if (changed) writeWorkspaceDB(workspaceId, db);
+    } catch (dbErr) {
+      console.warn('Could not sync db.json for upload-to-folder:', dbErr.message);
+    }
+
     res.status(201).json({ files: uploaded });
   });
 });
