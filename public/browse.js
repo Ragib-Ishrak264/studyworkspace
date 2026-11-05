@@ -425,15 +425,7 @@
     const canFwd  = navHistoryIdx < navHistory.length - 1;
     const canUp   = !!st.path;
 
-    // In-bar buttons
-    const bBack = $('br-nav-back');
-    if (bBack) bBack.disabled = !canBack;
-    const bFwd = $('br-nav-forward');
-    if (bFwd) bFwd.disabled = !canFwd;
-    const bUp = $('br-nav-up');
-    if (bUp) bUp.disabled = !canUp;
-
-    // Header nav buttons (always visible in top bar)
+    // Header nav buttons (the only nav buttons — in top bar)
     const hBack = $('hdr-nav-back');
     if (hBack) hBack.disabled = !canBack;
     const hFwd = $('hdr-nav-forward');
@@ -441,9 +433,9 @@
     const hUp = $('hdr-nav-up');
     if (hUp) hUp.disabled = !canUp;
 
-    // Show/hide the header arrow group
+    // Keep header arrows visible while browse is active
     const hGroup = $('hdr-nav-arrows');
-    if (hGroup) hGroup.hidden = false; // always show when browse is active
+    if (hGroup) hGroup.hidden = false;
   }
 
   function navigateToPath(path, addToHist = true) {
@@ -479,15 +471,7 @@
     if (st.bound) return;
     st.bound = true;
 
-    // Navigation buttons (back, forward, up) — in-bar set
-    const btnNavBack = $('br-nav-back');
-    if (btnNavBack) btnNavBack.addEventListener('click', goBack);
-    const btnNavForward = $('br-nav-forward');
-    if (btnNavForward) btnNavForward.addEventListener('click', goForward);
-    const btnNavUp = $('br-nav-up');
-    if (btnNavUp) btnNavUp.addEventListener('click', goUp);
-
-    // Header nav buttons — same actions
+    // Header navigation arrows (the ONLY nav buttons — in top header bar)
     const hdrBack = $('hdr-nav-back');
     if (hdrBack) hdrBack.addEventListener('click', goBack);
     const hdrFwd = $('hdr-nav-forward');
@@ -495,7 +479,7 @@
     const hdrUp = $('hdr-nav-up');
     if (hdrUp) hdrUp.addEventListener('click', goUp);
 
-    // Show the header arrows group
+    // Show the header arrows group immediately
     const hGroup = $('hdr-nav-arrows');
     if (hGroup) hGroup.hidden = false;
 
